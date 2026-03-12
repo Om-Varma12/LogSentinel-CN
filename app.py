@@ -634,7 +634,7 @@ sidebar_log_display = st.sidebar.empty()
 st.markdown("""
 <div class='sentinel-header'>
     <div>
-        <div class='sentinel-logo'>SENTINEL SYSTEMS v2.4.1</div>
+        <div class='sentinel-logo'>SENTINEL SYSTEMS</div>
         <div class='sentinel-title glitch-text'>AI LOG ANALYZER</div>
         <div class='sentinel-subtitle'>REAL-TIME THREAT INTELLIGENCE PLATFORM</div>
     </div>
