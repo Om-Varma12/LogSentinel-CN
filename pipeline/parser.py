@@ -15,8 +15,7 @@ Request Processing Time: 333   -> this is in ms
 import re
 
 def parse(log: str) -> dict:
-    pattern = r'(?P<ip>\S+) - - \[(?P<timestamp>[^\]]+)\] "(?P<method>\S+) (?P<request>[^\"]+)" (?P<status>\d+) (?P<size>\d+) "-" "(?P<client>[^"]+)" (?P<time>\d+)'
-
+    pattern = r'(?P<ip>\S+) - - \[(?P<timestamp>[^\]]+)\] "(?P<method>\S+) (?P<request>[^"]+)" (?P<status>\d+) (?P<size>\d+) "(?:[^"]*)" "(?P<client>[^"]+)" (?P<time>\d+)'
     match = re.match(pattern, log)
 
     if not match:

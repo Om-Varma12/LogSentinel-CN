@@ -4,4 +4,4 @@ with open('resources/logfiles.log', 'r') as f:
 def get_logs() -> str:
     return LOGS
     
-# get_logs()
+# print(get_logs())

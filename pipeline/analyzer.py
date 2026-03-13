@@ -79,7 +79,7 @@ def _modelBasedAnalyzer(log: dict) -> int:
     # Convert anomaly score → risk score (0–100)
     anomaly_risk = max(0, (0.5 - iso_score) * 100)
 
-    print(anomaly_risk)
+    # print(anomaly_risk)
     return int(round(anomaly_risk))
 
  
