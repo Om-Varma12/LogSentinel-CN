@@ -1,4 +1,4 @@
-from pipeline.analyzer import ruleBasedAnalyzer, modelBasedAnalyzer
+from pipeline.analyzer import getRiskScore
 from pipeline.parser import parse
 from services.log_generator import get_logs
 
@@ -7,5 +7,4 @@ def main():
     
     for log in logs:
         parsedLog = parse(log)
-        ruleScore = ruleBasedAnalyzer(parsedLog)
-        modelScore = modelBasedAnalyzer(parsedLog)
+        riskScore = getRiskScore(log)
