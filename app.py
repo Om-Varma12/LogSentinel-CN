@@ -2,957 +2,608 @@ import streamlit as st
 import time
 import random
 import re
+from datetime import datetime
 
 st.set_page_config(
-    page_title="SENTINEL // AI Log Analyzer",
+    page_title="SENTINEL // SOC Dashboard",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# -------------------------
-# Custom CSS — Cyberpunk Terminal Noir
-# -------------------------
+# ─────────────────────────────────────────
+# SESSION STATE
+# ─────────────────────────────────────────
+if "incidents"      not in st.session_state: st.session_state.incidents      = []
+if "selected_id"    not in st.session_state: st.session_state.selected_id    = None
+if "terminal_lines" not in st.session_state: st.session_state.terminal_lines = []
+if "inc_counter"    not in st.session_state: st.session_state.inc_counter    = 1000
+if "last_ingest"    not in st.session_state: st.session_state.last_ingest    = 0.0
 
+INGEST_INTERVAL = 4  # seconds
+
+# ─────────────────────────────────────────
+# CSS
+# ─────────────────────────────────────────
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;600;700&display=swap');
 
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;600;700&display=swap');
-
-/* === BASE RESET === */
 html, body, [class*="css"] {
     font-family: 'Rajdhani', sans-serif;
-    background-color: #020408 !important;
-    color: #e8fff4 !important;
+    background-color: #0e0e0e !important;
+    color: #f0f0f0 !important;
 }
-
-.stApp {
-    background: #020408 !important;
-    background-image:
-        repeating-linear-gradient(
-            0deg,
-            transparent,
-            transparent 2px,
-            rgba(0, 255, 140, 0.015) 2px,
-            rgba(0, 255, 140, 0.015) 4px
-        ) !important;
-}
-
-/* === SIDEBAR === */
-[data-testid="stSidebar"] {
-    background: #000d05 !important;
-    border-right: 1px solid rgba(0, 255, 100, 0.15) !important;
-}
-
-[data-testid="stSidebar"] * {
-    color: #88ffbb !important;
-}
-
-/* === SCROLLBAR === */
+.stApp { background: #0e0e0e !important; }
 ::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: #020408; }
-::-webkit-scrollbar-thumb { background: #00ff7f44; border-radius: 2px; }
+::-webkit-scrollbar-track { background: #0e0e0e; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 2px; }
 
-/* === HEADER SECTION === */
-.sentinel-header {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    padding: 30px 0 10px 0;
-    border-bottom: 1px solid rgba(0,255,120,0.12);
-    margin-bottom: 30px;
-}
-
-.sentinel-logo {
-    font-family: 'Orbitron', monospace;
-    font-size: 11px;
-    font-weight: 900;
-    color: #00ff7f;
-    letter-spacing: 6px;
-    text-transform: uppercase;
-    opacity: 0.5;
-}
-
-.sentinel-title {
-    font-family: 'Orbitron', monospace;
-    font-size: 32px;
-    font-weight: 900;
-    color: #00ff7f;
-    letter-spacing: 3px;
-    text-shadow: 0 0 30px rgba(0,255,127,0.4), 0 0 60px rgba(0,255,127,0.15);
-    line-height: 1;
-}
-
-.sentinel-subtitle {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 11px;
-    color: rgba(0,255,127,0.45);
-    letter-spacing: 4px;
-    margin-top: 4px;
-}
-
-/* === STATUS BADGE === */
-.status-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 12px;
-    border: 1px solid rgba(0,255,127,0.3);
-    border-radius: 2px;
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 10px;
-    color: #00ff7f;
-    letter-spacing: 2px;
-    background: rgba(0,255,127,0.05);
-}
-
-.status-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #00ff7f;
-    animation: pulse-dot 2s ease-in-out infinite;
-    box-shadow: 0 0 6px #00ff7f;
-}
-
-@keyframes pulse-dot {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.4; transform: scale(0.7); }
-}
-
-/* === STAGE CARDS === */
-.stage-container {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin: 20px 0;
-}
-
-.stage-item {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 14px 20px;
-    border: 1px solid rgba(0,255,127,0.08);
-    border-left: 3px solid rgba(0,255,127,0.08);
-    border-radius: 2px;
-    background: rgba(0, 255, 127, 0.02);
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 12px;
-    color: rgba(0,255,127,0.55);
-    letter-spacing: 1px;
-    transition: all 0.4s ease;
-}
-
-.stage-item.active {
-    border-left: 3px solid #00ff7f;
-    background: rgba(0, 255, 127, 0.06);
-    color: #00ff7f;
-    box-shadow: inset 0 0 20px rgba(0,255,127,0.04), 0 0 15px rgba(0,255,127,0.08);
-}
-
-.stage-item.done {
-    border-left: 3px solid rgba(0,255,127,0.6);
-    color: rgba(0,255,127,0.7);
-}
-
-.stage-num {
-    font-family: 'Orbitron', monospace;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 3px 7px;
-    border: 1px solid currentColor;
-    border-radius: 2px;
-    min-width: 28px;
-    text-align: center;
-}
-
-.stage-spinner {
-    display: inline-block;
-    animation: spin-char 0.5s steps(4, end) infinite;
-}
-
-@keyframes spin-char {
-    0%   { content: "⠋"; }
-}
-
-/* === METRIC CARDS === */
-.metric-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+/* HEADER */
+.soc-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 0 14px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
     margin-bottom: 20px;
 }
-
-.metric-card {
-    padding: 18px 20px;
-    border: 1px solid rgba(0,255,127,0.1);
-    border-radius: 2px;
-    background: rgba(0, 20, 10, 0.6);
-    position: relative;
-    overflow: hidden;
+.soc-title {
+    font-family: 'Orbitron', monospace; font-size: 22px; font-weight: 900;
+    color: #ffffff; letter-spacing: 3px;
+    text-shadow: 0 0 20px rgba(255,255,255,0.1);
+}
+.soc-sub {
+    font-family: 'Share Tech Mono', monospace; font-size: 10px;
+    color: rgba(255,255,255,0.3); letter-spacing: 4px; margin-top: 3px;
+}
+.live-badge {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 5px 14px; border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 2px; font-family: 'Share Tech Mono', monospace;
+    font-size: 10px; color: #ffffff; letter-spacing: 2px;
+    background: rgba(255,255,255,0.04);
+}
+.live-dot {
+    width: 7px; height: 7px; border-radius: 50%; background: #ffffff;
+    box-shadow: 0 0 8px rgba(255,255,255,0.7);
+    animation: pulse-dot 1.8s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%      { opacity:0.3; transform:scale(0.6); }
 }
 
-.metric-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(0,255,127,0.4), transparent);
+/* STAT CARDS */
+.stat-row {
+    display: grid; grid-template-columns: repeat(4,1fr);
+    gap: 10px; margin-bottom: 20px;
+}
+.stat-card {
+    padding: 14px 16px; background: #161616;
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 4px; position: relative; overflow: hidden;
+}
+.stat-label {
+    font-family: 'Share Tech Mono', monospace; font-size: 9px;
+    color: rgba(255,255,255,0.4); letter-spacing: 3px;
+    text-transform: uppercase; margin-bottom: 6px;
+}
+.stat-val {
+    font-family: 'Orbitron', monospace; font-size: 26px;
+    font-weight: 700; color: #ffffff; line-height: 1;
 }
 
-.metric-label {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 11px;
-    color: rgba(0,255,127,0.65);
-    letter-spacing: 3px;
-    text-transform: uppercase;
-    margin-bottom: 8px;
+/* SECTION HEADER */
+.sec-hdr {
+    font-family: 'Orbitron', monospace; font-size: 10px; font-weight: 700;
+    color: rgba(255,255,255,0.45); letter-spacing: 5px; text-transform: uppercase;
+    margin-bottom: 12px; display: flex; align-items: center; gap: 10px;
+}
+.sec-hdr::after {
+    content:''; flex:1; height:1px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.1), transparent);
 }
 
-.metric-value {
-    font-family: 'Orbitron', monospace;
-    font-size: 28px;
-    font-weight: 700;
-    color: #00ff7f;
-    text-shadow: 0 0 20px rgba(0,255,127,0.4);
-    line-height: 1;
+/* INCIDENT CARD */
+.inc-card {
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px 18px; margin-bottom: 10px;
+    background: #161616; border: 1px solid rgba(255,255,255,0.07);
+    border-left: 3px solid rgba(255,255,255,0.15);
+    border-radius: 4px; position: relative; overflow: hidden;
+}
+.inc-card.high   { border-left-color: #ff4444; }
+.inc-card.medium { border-left-color: #ffaa00; }
+.inc-card.low    { border-left-color: #00cc55; }
+.ring-wrap {
+    position: relative; width: 60px; height: 60px; flex-shrink: 0;
+}
+.ring-wrap svg { transform: rotate(-90deg); }
+.ring-score {
+    position: absolute; top:50%; left:50%;
+    transform: translate(-50%,-50%);
+    font-family: 'Orbitron', monospace; font-size: 15px; font-weight: 900;
+}
+.card-body { flex:1; min-width:0; }
+.card-top  { display:flex; align-items:center; gap:10px; margin-bottom:5px; flex-wrap:wrap; }
+.card-id {
+    font-family: 'Share Tech Mono', monospace; font-size:11px;
+    color:rgba(255,255,255,0.4); background:rgba(255,255,255,0.06);
+    padding:2px 8px; border-radius:2px; letter-spacing:1px;
+}
+.card-title {
+    font-family:'Rajdhani',sans-serif; font-size:17px;
+    font-weight:700; color:#ffffff; letter-spacing:0.5px;
+}
+.card-meta {
+    font-family:'Share Tech Mono',monospace; font-size:10px;
+    color:rgba(255,255,255,0.4); margin-bottom:8px;
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+}
+.card-tags { display:flex; gap:7px; flex-wrap:wrap; }
+.tag {
+    font-family:'Share Tech Mono',monospace; font-size:10px;
+    padding:3px 9px; border-radius:2px; border:1px solid; letter-spacing:0.5px;
+}
+.tag-red   { color:#ff6666; border-color:rgba(255,68,68,0.35);  background:rgba(255,68,68,0.08); }
+.tag-amber { color:#ffbb44; border-color:rgba(255,170,0,0.35);  background:rgba(255,170,0,0.08); }
+.tag-green { color:#44cc77; border-color:rgba(0,204,85,0.35);   background:rgba(0,204,85,0.08);  }
+.tag-blue  { color:#66aaff; border-color:rgba(80,150,255,0.35); background:rgba(80,150,255,0.08);}
+.tag-gray  { color:rgba(255,255,255,0.5); border-color:rgba(255,255,255,0.12); background:rgba(255,255,255,0.04);}
+.card-right { text-align:right; flex-shrink:0; min-width:130px; }
+.status-pill {
+    display:inline-flex; align-items:center; gap:5px;
+    padding:4px 10px; border-radius:2px;
+    font-family:'Share Tech Mono',monospace; font-size:10px;
+    letter-spacing:1px; margin-bottom:8px;
+}
+.pill-high   { background:rgba(255,68,68,0.12);  color:#ff6666; border:1px solid rgba(255,68,68,0.25);  }
+.pill-medium { background:rgba(255,170,0,0.12); color:#ffbb44; border:1px solid rgba(255,170,0,0.25);  }
+.pill-low    { background:rgba(0,204,85,0.12);  color:#44cc77; border:1px solid rgba(0,204,85,0.25);   }
+.pill-dot { width:5px; height:5px; border-radius:50%; background:currentColor; }
+.view-lbl {
+    font-family:'Share Tech Mono',monospace; font-size:10px;
+    color:rgba(255,255,255,0.4); letter-spacing:1px;
 }
 
-.metric-value.danger {
-    color: #ff4444;
-    text-shadow: 0 0 20px rgba(255,68,68,0.5);
+/* DETAIL */
+.detail-header {
+    padding:20px; background:#161616;
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:4px; margin-bottom:14px;
 }
-
-.metric-value.warn {
-    color: #ffaa00;
-    text-shadow: 0 0 20px rgba(255,170,0,0.4);
+.detail-title {
+    font-family:'Orbitron',monospace; font-size:18px;
+    font-weight:700; color:#ffffff; margin-bottom:8px; letter-spacing:1px;
 }
+.detail-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:14px; }
+.detail-row  { display:flex; gap:10px; padding:8px 12px; background:rgba(255,255,255,0.02); border-left:2px solid rgba(255,255,255,0.1); }
+.detail-key  { font-family:'Share Tech Mono',monospace; font-size:10px; color:rgba(255,255,255,0.4); letter-spacing:2px; text-transform:uppercase; min-width:90px; }
+.detail-val  { font-family:'Share Tech Mono',monospace; font-size:12px; color:#f0f0f0; font-weight:600; }
 
-/* === LOG DISPLAY === */
-.log-raw {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 13px;
-    line-height: 1.8;
-    padding: 20px;
-    background: #000d05;
-    border: 1px solid rgba(0,255,127,0.1);
-    border-radius: 2px;
-    color: #80ffb8;
-    word-break: break-all;
-    position: relative;
-    overflow: hidden;
-}
-
-.log-raw::before {
-    content: '> LIVE_INPUT';
-    display: block;
-    font-size: 9px;
-    color: rgba(0,255,127,0.3);
-    letter-spacing: 3px;
-    margin-bottom: 10px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid rgba(0,255,127,0.08);
-}
-
-/* === PARSED TABLE === */
-.parsed-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-}
-
-.parsed-row {
-    display: flex;
-    gap: 10px;
-    padding: 8px 12px;
-    background: rgba(0,255,127,0.03);
-    border-left: 2px solid rgba(0,255,127,0.15);
-}
-
-.parsed-key {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 10px;
-    color: rgba(0,255,127,0.6);
-    letter-spacing: 2px;
-    min-width: 80px;
-    text-transform: uppercase;
-    padding-top: 2px;
-}
-
-.parsed-val {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 12px;
-    color: #afffcc;
-    font-weight: 600;
-}
-
-/* === RISK GAUGE === */
-.risk-wrapper {
-    text-align: center;
-    padding: 20px;
-}
-
-.risk-bar-track {
-    height: 8px;
-    background: rgba(0,255,127,0.08);
-    border-radius: 4px;
-    border: 1px solid rgba(0,255,127,0.1);
-    overflow: hidden;
-    position: relative;
-    margin: 12px 0;
-}
-
-.risk-bar-fill {
-    height: 100%;
-    border-radius: 4px;
-    transition: width 1s cubic-bezier(0.23, 1, 0.32, 1);
-    position: relative;
-}
-
-.risk-bar-fill::after {
-    content: '';
-    position: absolute;
-    top: 0; right: 0; bottom: 0;
-    width: 20px;
-    background: rgba(255,255,255,0.3);
-    filter: blur(4px);
-}
-
-.risk-score-num {
-    font-family: 'Orbitron', monospace;
-    font-size: 48px;
-    font-weight: 900;
-    line-height: 1;
-    margin-bottom: 4px;
-}
-
-.risk-label-text {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 11px;
-    letter-spacing: 4px;
-    text-transform: uppercase;
-    opacity: 0.7;
-}
-
-/* === THREAT SUMMARY === */
 .threat-block {
-    padding: 20px;
-    border: 1px solid rgba(255,80,80,0.2);
-    border-left: 4px solid #ff4444;
-    background: rgba(255, 0, 0, 0.04);
-    border-radius: 2px;
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 13px;
-    line-height: 2.1;
-    color: #ffcccc;
-    font-weight: 600;
-    position: relative;
+    padding:18px 20px; border:1px solid rgba(255,255,255,0.07);
+    border-left:4px solid rgba(255,255,255,0.2);
+    background:rgba(255,255,255,0.02); border-radius:4px;
+    font-family:'Share Tech Mono',monospace; font-size:13px;
+    line-height:2.1; color:#f0f0f0; margin-bottom:14px; position:relative;
 }
-
 .threat-block::before {
-    content: '// THREAT_ANALYSIS';
-    display: block;
-    font-size: 9px;
-    color: rgba(255,68,68,0.5);
-    letter-spacing: 3px;
-    margin-bottom: 12px;
+    content:'// THREAT_ANALYSIS'; display:block; font-size:9px;
+    color:rgba(255,255,255,0.3); letter-spacing:3px; margin-bottom:10px;
 }
+.threat-block.high   { border-left-color:#ff4444; }
+.threat-block.medium { border-left-color:#ffaa00; }
+.threat-block.low    { border-left-color:#00cc55; }
 
-.threat-block.low {
-    border-left: 4px solid #00ff7f;
-    border-color: rgba(0,255,127,0.2);
-    background: rgba(0,255,127,0.03);
-    color: #ccffe6;
-    font-weight: 600;
-}
-.threat-block.low::before { color: rgba(0,255,127,0.5); }
-
-.threat-block.medium {
-    border-left: 4px solid #ffaa00;
-    border-color: rgba(255,170,0,0.2);
-    background: rgba(255,170,0,0.04);
-    color: #ffe0a0;
-    font-weight: 600;
-}
-.threat-block.medium::before { color: rgba(255,170,0,0.5); }
-
-/* === PLAYBOOK === */
 .playbook-block {
-    padding: 20px;
-    border: 1px solid rgba(0,170,255,0.2);
-    border-left: 4px solid #00aaff;
-    background: rgba(0, 140, 255, 0.04);
-    border-radius: 2px;
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 13px;
-    line-height: 2.1;
-    color: #cceeff;
-    font-weight: 600;
-    position: relative;
+    padding:18px 20px; border:1px solid rgba(80,150,255,0.15);
+    border-left:4px solid #5096ff; background:rgba(80,150,255,0.03);
+    border-radius:4px; font-family:'Share Tech Mono',monospace;
+    font-size:13px; line-height:2.1; color:#f0f0f0; position:relative;
 }
-
 .playbook-block::before {
-    content: '// RESPONSE_PLAYBOOK';
-    display: block;
-    font-size: 9px;
-    color: rgba(0,170,255,0.5);
-    letter-spacing: 3px;
-    margin-bottom: 12px;
+    content:'// RESPONSE_PLAYBOOK'; display:block; font-size:9px;
+    color:rgba(80,150,255,0.5); letter-spacing:3px; margin-bottom:10px;
 }
-
 .playbook-step {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 6px 0;
-    border-bottom: 1px solid rgba(0,170,255,0.06);
+    display:flex; align-items:flex-start; gap:12px;
+    padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.04);
 }
-
 .step-num {
-    font-family: 'Orbitron', monospace;
-    font-size: 11px;
-    padding: 2px 6px;
-    border: 1px solid rgba(0,170,255,0.3);
-    color: #00aaff;
-    border-radius: 2px;
-    min-width: 28px;
-    text-align: center;
-    margin-top: 2px;
+    font-family:'Orbitron',monospace; font-size:10px; padding:2px 6px;
+    border:1px solid rgba(80,150,255,0.3); color:#5096ff; border-radius:2px;
+    min-width:28px; text-align:center; flex-shrink:0; margin-top:2px;
 }
 
-/* === SECTION HEADERS === */
-.section-header {
-    font-family: 'Orbitron', monospace;
-    font-size: 12px;
-    font-weight: 700;
-    color: rgba(0,255,127,0.75);
-    letter-spacing: 5px;
-    text-transform: uppercase;
-    margin: 24px 0 12px 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+/* TERMINAL */
+.terminal-wrap {
+    background:#141414; border:1px solid rgba(255,255,255,0.07);
+    border-radius:4px; padding:14px 16px;
+    min-height:60vh; max-height:80vh; overflow-y:auto;
 }
-
-.section-header::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: linear-gradient(90deg, rgba(0,255,127,0.2), transparent);
+.term-hdr {
+    font-family:'Share Tech Mono',monospace; font-size:10px;
+    color:rgba(255,255,255,0.3); letter-spacing:3px;
+    margin-bottom:12px; padding-bottom:8px;
+    border-bottom:1px solid rgba(255,255,255,0.06);
+    display:flex; justify-content:space-between;
 }
+.t-line { font-family:'Share Tech Mono',monospace; font-size:12px; margin-bottom:4px; line-height:1.6; }
+.t-hi   { color:#ffffff; }
+.t-lo   { color:rgba(255,255,255,0.45); }
+.t-err  { color:#ff6666; }
+.t-warn { color:#ffbb44; }
+.t-ok   { color:#44cc77; }
+.t-cur  { color:rgba(255,255,255,0.6); animation:pulse-dot 1s infinite; }
 
-/* === SIDEBAR LOGS === */
-.sidebar-log-item {
-    font-family: 'Share Tech Mono', monospace;
-    font-size: 10px;
-    padding: 8px 10px;
-    margin-bottom: 4px;
-    border-left: 2px solid rgba(0,255,127,0.25);
-    background: rgba(0,255,127,0.03);
-    color: rgba(0,255,127,0.65);
-    word-break: break-all;
-    line-height: 1.6;
-    border-radius: 0 2px 2px 0;
-}
-
-.sidebar-log-item.active {
-    border-left: 2px solid #00ff7f;
-    background: rgba(0,255,127,0.08);
-    color: #afffcc;
-}
-
-/* === BUTTON === */
+/* BUTTON OVERRIDES */
 .stButton > button {
-    font-family: 'Orbitron', monospace !important;
-    font-size: 11px !important;
-    font-weight: 700 !important;
-    letter-spacing: 3px !important;
-    color: #00ff7f !important;
-    background: transparent !important;
-    border: 1px solid rgba(0,255,127,0.4) !important;
-    padding: 14px 36px !important;
-    border-radius: 2px !important;
-    text-transform: uppercase !important;
-    transition: all 0.3s ease !important;
-    box-shadow: 0 0 20px rgba(0,255,127,0.08) !important;
-    position: relative !important;
-    overflow: hidden !important;
+    font-family:'Orbitron',monospace !important; font-size:10px !important;
+    font-weight:700 !important; letter-spacing:2px !important;
+    color:#ffffff !important; background:transparent !important;
+    border:1px solid rgba(255,255,255,0.2) !important;
+    padding:10px 24px !important; border-radius:2px !important;
+    transition:all 0.2s ease !important;
 }
-
 .stButton > button:hover {
-    background: rgba(0,255,127,0.08) !important;
-    border-color: rgba(0,255,127,0.8) !important;
-    box-shadow: 0 0 30px rgba(0,255,127,0.2), inset 0 0 20px rgba(0,255,127,0.05) !important;
+    background:rgba(255,255,255,0.06) !important;
+    border-color:rgba(255,255,255,0.5) !important;
 }
 
-.stButton > button:active {
-    transform: scale(0.98) !important;
-}
+/* hide the tiny select buttons visually — they sit behind cards */
+div[data-testid="stHorizontalBlock"] { gap:0 !important; }
 
-/* === DIVIDERS === */
-hr {
-    border: none !important;
-    border-top: 1px solid rgba(0,255,127,0.08) !important;
-    margin: 20px 0 !important;
-}
-
-/* === SPINNER OVERRIDE === */
-.stSpinner > div {
-    border-top-color: #00ff7f !important;
-}
-
-/* === HIDE DEFAULT STREAMLIT ELEMENTS === */
-#MainMenu { visibility: hidden; }
-footer { visibility: hidden; }
-header { visibility: hidden; }
-.block-container { padding-top: 20px !important; }
-
-/* === SCAN LINE ANIMATION === */
-@keyframes scanline {
-    0% { transform: translateY(-100%); }
-    100% { transform: translateY(100vh); }
-}
-
-.scanline-overlay {
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: linear-gradient(transparent, rgba(0,255,127,0.04), transparent);
-    pointer-events: none;
-    z-index: 9999;
-    animation: scanline 6s linear infinite;
-}
-
-/* === TYPEWRITER === */
-@keyframes typewriter {
-    from { width: 0; }
-    to { width: 100%; }
-}
-
-@keyframes blink-cursor {
-    0%, 100% { border-right-color: #00ff7f; }
-    50% { border-right-color: transparent; }
-}
-
-/* === GLITCH === */
-@keyframes glitch {
-    0%, 100% { text-shadow: 0 0 30px rgba(0,255,127,0.4); transform: translate(0); }
-    20% { text-shadow: -2px 0 rgba(255,0,80,0.5), 2px 0 rgba(0,255,255,0.5); transform: translate(-1px, 0); }
-    40% { text-shadow: 2px 0 rgba(255,0,80,0.5), -2px 0 rgba(0,255,255,0.5); transform: translate(1px, 0); }
-    60% { text-shadow: 0 0 30px rgba(0,255,127,0.4); transform: translate(0); }
-}
-
-.glitch-text {
-    animation: glitch 5s ease-in-out infinite;
-}
-
+#MainMenu { visibility:hidden; }
+footer    { visibility:hidden; }
+header    { visibility:hidden; }
+.block-container { padding-top:16px !important; }
 </style>
-
-<div class='scanline-overlay'></div>
 """, unsafe_allow_html=True)
 
-# -------------------------
-# Demo Logs (single log pool)
-# -------------------------
-
-logs = [
-    "2026-03-12T18:10:22Z server-01 auth INFO EVENT_ID=1001 SRC_IP=192.168.1.45 USER=john ACTION=login STATUS=success MESSAGE='User john logged in successfully'",
-    "2026-03-12T18:12:11Z server-01 auth WARN EVENT_ID=1002 SRC_IP=192.168.1.88 USER=admin ACTION=login STATUS=failed MESSAGE='Failed login attempt for admin account'",
-    "2026-03-12T18:13:40Z server-01 auth ERROR EVENT_ID=1003 SRC_IP=192.168.1.88 USER=admin ACTION=login STATUS=failed MESSAGE='Multiple failed login attempts detected'",
-    "2026-03-12T18:18:55Z firewall-01 network ALERT EVENT_ID=3001 SRC_IP=10.0.0.5 USER=unknown ACTION=port_scan STATUS=blocked MESSAGE='Port scan detected targeting multiple ports'",
-    "2026-03-12T18:20:33Z firewall-01 network CRITICAL EVENT_ID=3002 SRC_IP=172.16.0.7 USER=system ACTION=data_transfer STATUS=allowed MESSAGE='Large outbound traffic to unknown external server'"
+# ─────────────────────────────────────────
+# DATA
+# ─────────────────────────────────────────
+LOG_TEMPLATES = [
+    "2026-03-{d}T{h}:{m}:{s}Z server-01 auth ERROR EVENT_ID={id} SRC_IP=192.168.1.88 USER=admin ACTION=login STATUS=failed MESSAGE='Multiple failed login attempts detected'",
+    "2026-03-{d}T{h}:{m}:{s}Z firewall-01 network ALERT EVENT_ID={id} SRC_IP=10.0.0.{r} USER=unknown ACTION=port_scan STATUS=blocked MESSAGE='Port scan detected targeting multiple ports'",
+    "2026-03-{d}T{h}:{m}:{s}Z server-02 network CRITICAL EVENT_ID={id} SRC_IP=172.16.0.{r} USER=system ACTION=data_transfer STATUS=allowed MESSAGE='Large outbound traffic to unknown external server'",
+    "2026-03-{d}T{h}:{m}:{s}Z server-01 auth WARN EVENT_ID={id} SRC_IP=10.10.{r}.5 USER=jsmith ACTION=login STATUS=failed MESSAGE='Failed login attempt for user account'",
+    "2026-03-{d}T{h}:{m}:{s}Z db-01 database CRITICAL EVENT_ID={id} SRC_IP=192.168.5.{r} USER=dbadmin ACTION=bulk_export STATUS=success MESSAGE='Unusual bulk data export detected from database'",
+    "2026-03-{d}T{h}:{m}:{s}Z vpn-gw auth ALERT EVENT_ID={id} SRC_IP=185.220.{r}.44 USER=unknown ACTION=brute_force STATUS=blocked MESSAGE='Brute force attack detected on VPN gateway'",
+    "2026-03-{d}T{h}:{m}:{s}Z server-03 process WARN EVENT_ID={id} SRC_IP=10.0.1.{r} USER=svc_account ACTION=privilege_escalation STATUS=attempted MESSAGE='Privilege escalation attempt via sudo'",
+    "2026-03-{d}T{h}:{m}:{s}Z endpoint-07 malware CRITICAL EVENT_ID={id} SRC_IP=10.20.{r}.12 USER=msingh ACTION=malware_exec STATUS=blocked MESSAGE='Ransomware execution attempt blocked by EDR'",
 ]
 
-# -------------------------
-# Parser
-# -------------------------
+TITLES = {
+    "login":                "Failed Authentication Spike",
+    "port_scan":            "Port Scan Detected",
+    "data_transfer":        "Suspicious Data Exfiltration",
+    "bulk_export":          "Bulk Database Export Alert",
+    "brute_force":          "Brute Force Attack",
+    "privilege_escalation": "Privilege Escalation Attempt",
+    "malware_exec":         "Malware Execution Blocked",
+}
 
+MITRE = {
+    "login":                ("T1110", "Brute Force"),
+    "port_scan":            ("T1046", "Network Discovery"),
+    "data_transfer":        ("T1041", "Exfiltration"),
+    "bulk_export":          ("T1530", "Data from Cloud"),
+    "brute_force":          ("T1110", "Brute Force"),
+    "privilege_escalation": ("T1068", "Exploit Privilege"),
+    "malware_exec":         ("T1204", "User Execution"),
+}
+
+# ─────────────────────────────────────────
+# PARSERS / BUILDERS
+# ─────────────────────────────────────────
 def parse_log(log):
-    pattern = r'(\S+) (\S+) (\S+) (\S+) EVENT_ID=(\d+) SRC_IP=(\S+) USER=(\S+) ACTION=(\S+) STATUS=(\S+)'
-    match = re.search(pattern, log)
-    if match:
-        return {
-            "timestamp": match.group(1),
-            "host": match.group(2),
-            "service": match.group(3),
-            "level": match.group(4),
-            "event_id": match.group(5),
-            "src_ip": match.group(6),
-            "user": match.group(7),
-            "action": match.group(8),
-            "status": match.group(9)
-        }
+    m = re.search(r'(\S+) (\S+) (\S+) (\S+) EVENT_ID=(\d+) SRC_IP=(\S+) USER=(\S+) ACTION=(\S+) STATUS=(\S+)', log)
+    if m:
+        return {"timestamp":m.group(1),"host":m.group(2),"service":m.group(3),
+                "level":m.group(4),"event_id":m.group(5),"src_ip":m.group(6),
+                "user":m.group(7),"action":m.group(8),"status":m.group(9)}
     return None
 
-# -------------------------
-# Risk Engine
-# -------------------------
-
 def calculate_risk(log):
-    score = 0
-    if "failed" in log: score += 15
-    if "port_scan" in log: score += 40
-    if "data_transfer" in log: score += 35
-    if "CRITICAL" in log: score += 25
-    if "ERROR" in log: score += 20
-    if "ALERT" in log: score += 30
-    if "WARN" in log: score += 10
-    return min(score, 100)
+    s = 0
+    if "failed"               in log: s += 15
+    if "port_scan"            in log: s += 40
+    if "data_transfer"        in log: s += 35
+    if "bulk_export"          in log: s += 45
+    if "brute_force"          in log: s += 50
+    if "privilege_escalation" in log: s += 55
+    if "malware_exec"         in log: s += 70
+    if "CRITICAL"             in log: s += 20
+    if "ERROR"                in log: s += 15
+    if "ALERT"                in log: s += 25
+    if "WARN"                 in log: s += 10
+    return min(s, 100)
 
 def risk_level(score):
-    if score <= 20: return "LOW", "#00ff7f", "low"
-    if score <= 55: return "MEDIUM", "#ffaa00", "medium"
-    return "HIGH", "#ff4444", "high"
+    if score <= 30: return "LOW",    "#00cc55", "low"
+    if score <= 60: return "MEDIUM", "#ffaa00", "medium"
+    return               "HIGH",    "#ff4444", "high"
 
-def risk_color_bar(score):
-    if score <= 3: return "linear-gradient(90deg, #00ff7f, #00cc60)"
-    if score <= 9: return "linear-gradient(90deg, #ffaa00, #ff6600)"
-    return "linear-gradient(90deg, #ff4444, #cc0000)"
+def generate_raw():
+    now = datetime.now()
+    tpl = random.choice(LOG_TEMPLATES)
+    raw = tpl.format(d=f"{now.day:02d}", h=f"{now.hour:02d}",
+                     m=f"{now.minute:02d}", s=f"{now.second:02d}",
+                     id=st.session_state.inc_counter, r=random.randint(1,254))
+    st.session_state.inc_counter += 1
+    return raw
 
-# -------------------------
-# SIDEBAR
-# -------------------------
+def build_incident(raw):
+    p = parse_log(raw)
+    if not p: return None
+    score = calculate_risk(raw)
+    lvl, color, cls = risk_level(score)
+    action = p["action"]
+    mid, mname = MITRE.get(action, ("T0000","Unknown"))
+    steps = [
+        f"Isolate {p['src_ip']} and cross-reference threat intelligence feeds",
+        f"Audit all recent activity for user '{p['user']}' across systems",
+        f"{'Block' if score>=50 else 'Monitor'} {p['src_ip']} at the perimeter firewall {'immediately' if score>=50 else 'for next 24h'}",
+        "Notify Tier-2 SOC analyst and open escalation ticket",
+        "Collect forensic artifacts from affected host" if score>=60 else "Schedule review of affected account permissions",
+        "Update SIEM detection rule to capture future variants",
+        "File post-incident report and brief stakeholders",
+    ]
+    analysis = (
+        f"Suspicious {action.replace('_',' ')} activity detected from {p['src_ip']}. "
+        f"Risk classified as {lvl} ({score}/100). "
+        + ("Immediate containment and forensic investigation advised." if score>=60
+           else "Enhanced monitoring and investigation recommended." if score>=30
+           else "Low-priority review. No immediate action required.")
+    )
+    return {
+        "id": f"#{p['event_id']}", "title": TITLES.get(action, action.replace("_"," ").title()),
+        "raw": raw, "parsed": p, "score": score, "level": lvl,
+        "color": color, "cls": cls, "mitre_id": mid, "mitre_name": mname,
+        "action": action, "ts": p["timestamp"][11:19]+" UTC",
+        "playbook": steps, "analysis": analysis,
+    }
 
-st.sidebar.markdown("""
-<div style='font-family: Orbitron, monospace; font-size: 10px; color: #00ff7f;
-     letter-spacing: 4px; text-transform: uppercase; padding: 10px 0 20px 0;
-     border-bottom: 1px solid rgba(0,255,127,0.15); margin-bottom: 16px;'>
-     SENTINEL<br/>
-     <span style='font-size:8px; opacity:0.4; letter-spacing:3px;'>LOG STREAM MONITOR</span>
-</div>
-""", unsafe_allow_html=True)
+def add_terminal(txt, style="lo"):
+    st.session_state.terminal_lines.append((txt, style))
+    if len(st.session_state.terminal_lines) > 80:
+        st.session_state.terminal_lines = st.session_state.terminal_lines[-80:]
 
-sidebar_header = st.sidebar.empty()
-sidebar_log_display = st.sidebar.empty()
+# ─────────────────────────────────────────
+# INGEST ENGINE  (fires each rerun if interval elapsed)
+# ─────────────────────────────────────────
+now_ts = time.time()
+if now_ts - st.session_state.last_ingest >= INGEST_INTERVAL:
+    raw = generate_raw()
+    inc = build_incident(raw)
+    if inc:
+        st.session_state.incidents.insert(0, inc)
+        if len(st.session_state.incidents) > 50:
+            st.session_state.incidents = st.session_state.incidents[:50]
+        add_terminal(f"[IN]    Log ingested → {inc['id']}", "lo")
+        add_terminal(f"[PARSE] {inc['action'].upper()} | SRC:{inc['parsed']['src_ip']}", "lo")
+        sty = "ok" if inc["score"]<=30 else "warn" if inc["score"]<=60 else "err"
+        add_terminal(f"[RISK]  {inc['score']}/100 → {inc['level']} THREAT", sty)
+        add_terminal(f"[QUEUE] {inc['id']} — {inc['title'][:35]}", "hi")
+    st.session_state.last_ingest = now_ts
 
+# ─────────────────────────────────────────
+# HTML HELPERS
+# ─────────────────────────────────────────
+def ring_svg(score, color, size=60):
+    r = 22; circ = 2*3.14159*r; fill = (score/100)*circ
+    return f"""<div class="ring-wrap" style="width:{size}px;height:{size}px;">
+      <svg width="{size}" height="{size}" viewBox="0 0 {size} {size}">
+        <circle cx="{size//2}" cy="{size//2}" r="{r}" fill="none"
+                stroke="rgba(255,255,255,0.08)" stroke-width="4"/>
+        <circle cx="{size//2}" cy="{size//2}" r="{r}" fill="none"
+                stroke="{color}" stroke-width="4" stroke-linecap="round"
+                stroke-dasharray="{fill:.1f} {circ:.1f}"
+                style="filter:drop-shadow(0 0 4px {color}88)"/>
+      </svg>
+      <div class="ring-score" style="color:{color};">{score}</div>
+    </div>"""
 
+def pill_html(inc):
+    c = {"HIGH":"pill-high","MEDIUM":"pill-medium","LOW":"pill-low"}[inc["level"]]
+    return f'<div class="status-pill {c}"><div class="pill-dot"></div>{inc["level"]}</div>'
 
-# -------------------------
-# MAIN HEADER
-# -------------------------
+def sev_tag(inc):
+    c = {"HIGH":"tag-red","MEDIUM":"tag-amber","LOW":"tag-green"}[inc["level"]]
+    return f'<span class="tag {c}">{inc["level"]} Severity</span>'
 
+# ─────────────────────────────────────────
+# HEADER
+# ─────────────────────────────────────────
 st.markdown("""
-<div class='sentinel-header'>
-    <div>
-        <div class='sentinel-logo'>SENTINEL SYSTEMS</div>
-        <div class='sentinel-title glitch-text'>AI LOG ANALYZER</div>
-        <div class='sentinel-subtitle'>REAL-TIME THREAT INTELLIGENCE PLATFORM</div>
-    </div>
-    <div style='margin-left: auto;'>
-        <div class='status-badge'>
-            <div class='status-dot'></div>
-            SYSTEM ONLINE
-        </div>
-    </div>
+<div class="soc-header">
+  <div>
+    <div class="soc-title">SENTINEL SOC</div>
+    <div class="soc-sub">SECURITY OPERATIONS CENTER // REAL-TIME THREAT MONITOR</div>
+  </div>
+  <div class="live-badge"><div class="live-dot"></div>INGESTING LIVE</div>
 </div>
 """, unsafe_allow_html=True)
 
-# -------------------------
-# TOP METRICS + START BUTTON
-# -------------------------
+# ─────────────────────────────────────────
+# STAT ROW
+# ─────────────────────────────────────────
+total  = len(st.session_state.incidents)
+highs  = sum(1 for i in st.session_state.incidents if i["level"]=="HIGH")
+meds   = sum(1 for i in st.session_state.incidents if i["level"]=="MEDIUM")
+lows   = sum(1 for i in st.session_state.incidents if i["level"]=="LOW")
 
-m1, m2, m3, m4 = st.columns([1, 1, 1, 2])
+st.markdown(f"""
+<div class="stat-row">
+  <div class="stat-card">
+    <div style="position:absolute;top:0;left:0;right:0;height:1px;
+         background:linear-gradient(90deg,transparent,rgba(255,255,255,0.2),transparent);"></div>
+    <div class="stat-label">Total Incidents</div>
+    <div class="stat-val">{total:03d}</div>
+  </div>
+  <div class="stat-card">
+    <div style="position:absolute;top:0;left:0;right:0;height:1px;
+         background:linear-gradient(90deg,transparent,rgba(255,68,68,0.6),transparent);"></div>
+    <div class="stat-label">High Severity</div>
+    <div class="stat-val" style="color:#ff4444;">{highs:03d}</div>
+  </div>
+  <div class="stat-card">
+    <div style="position:absolute;top:0;left:0;right:0;height:1px;
+         background:linear-gradient(90deg,transparent,rgba(255,170,0,0.6),transparent);"></div>
+    <div class="stat-label">Medium Severity</div>
+    <div class="stat-val" style="color:#ffaa00;">{meds:03d}</div>
+  </div>
+  <div class="stat-card">
+    <div style="position:absolute;top:0;left:0;right:0;height:1px;
+         background:linear-gradient(90deg,transparent,rgba(0,204,85,0.6),transparent);"></div>
+    <div class="stat-label">Low Severity</div>
+    <div class="stat-val" style="color:#00cc55;">{lows:03d}</div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
-total_box = m1.empty()
-risk_box = m2.empty()
-level_box = m3.empty()
+# ─────────────────────────────────────────
+# MAIN LAYOUT  —  incidents 75%  |  terminal 25%
+# ─────────────────────────────────────────
+col_main, col_term = st.columns([3, 1])
 
-with m4:
-    start = st.button("⟩  INITIALIZE SCAN")
-
-def render_metrics(total, risk_score, level_str, level_color):
-    total_box.markdown(f"""
-    <div class='metric-card'>
-        <div class='metric-label'>LOGS PROCESSED</div>
-        <div class='metric-value'>{total:03d}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    risk_box.markdown(f"""
-    <div class='metric-card'>
-        <div class='metric-label'>RISK SCORE</div>
-        <div class='metric-value' style='color:{level_color}; text-shadow: 0 0 20px {level_color}66;'>{risk_score}/100</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    level_box.markdown(f"""
-    <div class='metric-card'>
-        <div class='metric-label'>THREAT LEVEL</div>
-        <div class='metric-value' style='font-size:22px; color:{level_color}; text-shadow: 0 0 20px {level_color}66;'>{level_str}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-render_metrics(0, 0, "IDLE", "rgba(0,255,127,0.4)")
-
-# -------------------------
-# LAYOUT — two main columns
-# left: pipeline stages   right: live terminal
-# -------------------------
-
-main_left, main_right = st.columns([1, 1])
-
-with main_left:
-    st.markdown("<div class='section-header'>PIPELINE STAGES</div>", unsafe_allow_html=True)
-    stages_box = st.empty()
-
-with main_right:
-    st.markdown("<div class='section-header' style='margin-bottom: 32px;'>LIVE TERMINAL FEED</div>", unsafe_allow_html=True)
-    terminal_box = main_right.empty()
-
-# second row — parsed fields + risk analysis
-st.markdown("<div class='section-header'>INGESTED LOG</div>", unsafe_allow_html=True)
-log_display = st.empty()
-
-col_left, col_right = st.columns([1, 1])
-
-with col_left:
-    st.markdown("<div class='section-header'>PARSED FIELDS</div>", unsafe_allow_html=True)
-    parsed_display = col_left.empty()
-
-with col_right:
-    st.markdown("<div class='section-header'>RISK ANALYSIS</div>", unsafe_allow_html=True)
-    risk_display = col_right.empty()
-
-st.markdown("<div class='section-header'>THREAT SUMMARY</div>", unsafe_allow_html=True)
-summary_display = st.empty()
-
-st.markdown("<div class='section-header'>RESPONSE PLAYBOOK</div>", unsafe_allow_html=True)
-playbook_display = st.empty()
-
-# -------------------------
-# STAGE RENDERER
-# -------------------------
-
-def render_stages(active_stage):
-    stage_defs = [
-        ("01", "LOG INGESTION",    "Capturing raw log stream from data source"),
-        ("02", "PARSE & TOKENIZE", "Extracting structured fields from log entry"),
-        ("03", "RISK SCORING",     "Calculating threat severity via heuristic engine"),
-        ("04", "AI SYNTHESIS",     "Generating natural-language threat summary"),
-        ("05", "PLAYBOOK GEN",     "Compiling incident response recommendations"),
-    ]
-    html = "<div class='stage-container'>"
-    for i, (num, title, desc) in enumerate(stage_defs):
-        stage_idx = i + 1
-        if stage_idx < active_stage:
-            cls, indicator = "done", "✓"
-        elif stage_idx == active_stage:
-            cls, indicator = "active", "⟳"
-        else:
-            cls, indicator = "", "○"
-        html += f"""
-        <div class='stage-item {cls}'>
-            <span class='stage-num'>{indicator}</span>
-            <div>
-                <div style='font-size:14px; letter-spacing:2px; font-weight:700;'>{title}</div>
-                <div style='font-size:12px; opacity:0.7; margin-top:3px;'>{desc}</div>
-            </div>
-        </div>"""
-    html += "</div>"
-    stages_box.markdown(html, unsafe_allow_html=True)
-
-# -------------------------
-# TERMINAL RENDERER
-# -------------------------
-
-terminal_lines = []
-
-def render_terminal(new_line=None, highlight=False):
-    global terminal_lines
-    if new_line:
-        terminal_lines.append((new_line, highlight))
-
-    rows = ""
-    for i, (line, hl) in enumerate(terminal_lines):
-        color = "#00ff7f" if hl else "rgba(0,255,127,0.55)"
-        glow  = f"text-shadow: 0 0 8px rgba(0,255,127,0.5);" if hl else ""
-        rows += f"<div style='color:{color}; {glow} margin-bottom:5px; font-size:13px;'>{line}</div>"
-
-    # blinking cursor on last line
-    rows += "<div style='color:#00ff7f; animation: pulse-dot 1s infinite;'>█</div>"
-
-    terminal_box.markdown(f"""
-    <div style='
-        font-family: Share Tech Mono, monospace;
-        background: #000c04;
-        border: 1px solid rgba(0,255,127,0.15);
-        border-radius: 2px;
-        padding: 16px 18px;
-        min-height: 420px;
-        max-height: 320px;
-        overflow-y: auto;
-        position: relative;
-    '>
-        <div style='font-size:10px; color:rgba(0,255,127,0.4); letter-spacing:3px;
-             margin-bottom:12px; padding-bottom:8px;
-             border-bottom:1px solid rgba(0,255,127,0.08);
-             display:flex; justify-content:space-between;'>
-            <span>SENTINEL:// TERMINAL</span>
-            <span style='animation: pulse-dot 2s infinite;'>● LIVE</span>
-        </div>
-        {rows}
-    </div>
-    """, unsafe_allow_html=True)
-
-render_stages(0)
-render_terminal()
-
-# -------------------------
-# SIMULATION
-# -------------------------
-
-if start:
-    terminal_lines = []          # reset terminal on each run
-    log = random.choice(logs)
-
-    # Sidebar
-    sidebar_header.markdown("""
-    <div style='font-family: Share Tech Mono, monospace; font-size: 11px;
-         color: rgba(0,255,127,0.6); letter-spacing: 2px; margin-bottom: 8px;'>
-         ACTIVE LOG ENTRY:
-    </div>
-    """, unsafe_allow_html=True)
-    sidebar_log_display.markdown(f"""
-    <div class='sidebar-log-item active'>{log}</div>
-    """, unsafe_allow_html=True)
-
-    # === STAGE 1: INGEST ===
-    render_stages(1)
-    render_terminal("[SYS]  Initialising log ingestion pipeline...", highlight=False)
-    time.sleep(1)
-    render_terminal("[SYS]  Stream connection established.", highlight=False)
-    time.sleep(0.8)
-    render_terminal(f"[IN]   Raw log captured ↓", highlight=True)
-    time.sleep(0.6)
-    render_terminal(f"[DATA] {log[:80]}{'...' if len(log)>80 else ''}", highlight=True)
-    log_display.markdown(f"<div class='log-raw'>{log}</div>", unsafe_allow_html=True)
-    time.sleep(2)
-
-    # === STAGE 2: PARSE ===
-    render_stages(2)
-    render_terminal("[SYS]  Starting tokenizer / field extractor...", highlight=False)
-    time.sleep(0.8)
-    parsed = parse_log(log)
-    if parsed:
-        for k, v in parsed.items():
-            render_terminal(f"[FLD]  {k.upper():<12} → {v}", highlight=False)
-            time.sleep(0.25)
-        rows_html = "".join(f"""
-            <div class='parsed-row'>
-                <span class='parsed-key'>{k}</span>
-                <span class='parsed-val'>{v}</span>
-            </div>""" for k, v in parsed.items())
-        parsed_display.markdown(f"<div class='parsed-grid'>{rows_html}</div>", unsafe_allow_html=True)
-    render_terminal("[OK]   Parsing complete — 9 fields extracted.", highlight=True)
-    time.sleep(2)
-
-    # === STAGE 3: RISK ===
-    render_stages(3)
-    render_terminal("[SYS]  Running heuristic risk scoring engine...", highlight=False)
-    time.sleep(0.8)
-    risk_score = calculate_risk(log)
-    level_str, level_color, level_cls = risk_level(risk_score)
-    bar_pct = int((risk_score / 100) * 100)
-    bar_grad = risk_color_bar(risk_score)
-
-    render_terminal(f"[RISK] Score computed: {risk_score}/100", highlight=False)
-    time.sleep(0.5)
-    render_terminal(f"[RISK] Threat level  : {level_str}", highlight=True)
-    time.sleep(0.5)
-
-    risk_display.markdown(f"""
-    <div style='padding: 20px; border: 1px solid {level_color}33; border-radius: 2px;
-         background: {level_color}08;'>
-        <div class='risk-wrapper'>
-            <div class='risk-score-num' style='color:{level_color};
-                 text-shadow: 0 0 30px {level_color}55;'>{risk_score}</div>
-            <div class='risk-label-text' style='color:{level_color}; font-size:14px;'>/ 100 — {level_str} THREAT</div>
-            <div class='risk-bar-track' style='margin-top: 16px;'>
-                <div class='risk-bar-fill' style='width:{bar_pct}%; background:{bar_grad};'></div>
-            </div>
-            <div style='display:flex; justify-content:space-between;
-                 font-family: Share Tech Mono, monospace; font-size:12px;
-                 color: rgba(0,255,127,0.5); letter-spacing: 2px; margin-top: 6px;'>
-                <span>LOW</span><span>MEDIUM</span><span>CRITICAL</span>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    render_metrics(1, risk_score, level_str, level_color)
-    time.sleep(2)
-
-    # === STAGE 4: SUMMARY ===
-    render_stages(4)
-    render_terminal("[AI]   Generating threat intelligence summary...", highlight=False)
-    time.sleep(1.2)
-
-    action   = parsed['action']   if parsed else 'unknown'
-    src_ip   = parsed['src_ip']   if parsed else 'unknown'
-    user     = parsed['user']     if parsed else 'unknown'
-    status   = parsed['status']   if parsed else 'unknown'
-    host     = parsed['host']     if parsed else 'unknown'
-    event_id = parsed['event_id'] if parsed else 'N/A'
-
-    render_terminal(f"[AI]   Event {event_id}: {action.upper()} from {src_ip}", highlight=True)
-    time.sleep(0.5)
-    render_terminal(f"[AI]   Classification: {level_str} THREAT", highlight=True)
-
-    summary_display.markdown(f"""
-    <div class='threat-block {level_cls}'>
-        EVENT_ID &nbsp;&nbsp;&nbsp; → {event_id}<br/>
-        ACTION &nbsp;&nbsp;&nbsp;&nbsp; → {action.upper()}<br/>
-        SOURCE_IP &nbsp;&nbsp; → {src_ip}<br/>
-        USER &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → {user}<br/>
-        HOST &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → {host}<br/>
-        STATUS &nbsp;&nbsp;&nbsp;&nbsp; → {status.upper()}<br/>
-        RISK_SCORE &nbsp; → {risk_score}/100 [{level_str}]<br/>
-        <br/>
-        ANALYSIS &nbsp;&nbsp; → Suspicious {action.replace('_',' ')} activity detected from
-        {src_ip}. Threat classification: {level_str}. Immediate review recommended
-        {'if pattern persists.' if risk_score < 10 else 'and containment advised.'}
-    </div>
-    """, unsafe_allow_html=True)
-    time.sleep(2)
-
-    # === STAGE 5: PLAYBOOK ===
-    render_stages(5)
-    render_terminal("[PB]   Building incident response playbook...", highlight=False)
-    time.sleep(1)
-
-    playbook_steps = [
-        f"Isolate source IP {src_ip} and cross-reference against threat intel feeds",
-        f"Review all recent activity from user '{user}' across authentication logs",
-        f"{'Block' if risk_score >= 10 else 'Monitor'} {src_ip} at perimeter firewall {'immediately' if risk_score >= 10 else 'for next 24h'}",
-        "Escalate to Tier-2 SOC analyst if additional events from same source",
-        "Document incident in SIEM and update threat actor profile if applicable",
-    ]
-
-    steps_html = ""
-    for i, step in enumerate(playbook_steps, 1):
-        render_terminal(f"[PB]   Step {i:02d}: {step[:55]}{'...' if len(step)>55 else ''}", highlight=False)
-        steps_html += f"""
-        <div class='playbook-step'>
-            <span class='step-num'>{i:02d}</span>
-            <span>{step}</span>
-        </div>"""
-        time.sleep(0.4)
-
-    playbook_display.markdown(f"<div class='playbook-block'>{steps_html}</div>", unsafe_allow_html=True)
-
-    render_stages(6)
-    render_terminal("[DONE] ── Analysis pipeline complete ──", highlight=True)
-    time.sleep(1)
-
+# ── TERMINAL (right 25%) ──────────────────
+with col_term:
+    st.markdown("<div class='sec-hdr'>LIVE TERMINAL</div>", unsafe_allow_html=True)
+    lines_html = "".join(
+        f"<div class='t-line t-{sty}'>{txt}</div>"
+        for txt, sty in st.session_state.terminal_lines[-50:]
+    )
+    lines_html += "<div class='t-line t-cur'>█</div>"
     st.markdown(f"""
-    <div style='margin-top: 20px; padding: 16px 22px;
-         border: 1px solid {level_color}33; border-radius: 2px;
-         background: {level_color}06; display: flex; align-items: center; gap: 14px;'>
-        <div style='width: 10px; height: 10px; border-radius: 50%;
-             background: {level_color}; box-shadow: 0 0 12px {level_color};
-             animation: pulse-dot 1.5s ease-in-out infinite; flex-shrink:0;'></div>
-        <span style='font-family: Share Tech Mono, monospace; font-size: 14px;
-              color: {level_color}; letter-spacing: 2px; font-weight:600;'>
-            ANALYSIS COMPLETE &nbsp;·&nbsp; THREAT LEVEL: {level_str} &nbsp;·&nbsp; RISK SCORE: {risk_score}/100
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
+    <div class="terminal-wrap">
+      <div class="term-hdr"><span>SENTINEL:// STREAM</span><span>● LIVE</span></div>
+      {lines_html}
+    </div>""", unsafe_allow_html=True)
+
+# ── INCIDENTS (left 75%) ─────────────────
+with col_main:
+    if st.session_state.selected_id is None:
+        # ── LIST VIEW ──
+        st.markdown("<div class='sec-hdr'>INCIDENT QUEUE</div>", unsafe_allow_html=True)
+
+        if not st.session_state.incidents:
+            st.markdown("""
+            <div style='font-family:Share Tech Mono,monospace;font-size:12px;
+                 color:rgba(255,255,255,0.3);padding:60px;text-align:center;'>
+                 Awaiting first log ingestion...
+            </div>""", unsafe_allow_html=True)
+        else:
+            for inc in st.session_state.incidents:
+                mitre_tag = f'<span class="tag tag-blue">MITRE: {inc["mitre_id"]}</span>'
+                act_tag   = f'<span class="tag tag-gray">{inc["action"].replace("_"," ").upper()}</span>'
+
+                st.markdown(f"""
+                <div class="inc-card {inc['cls']}">
+                  {ring_svg(inc['score'], inc['color'])}
+                  <div class="card-body">
+                    <div class="card-top">
+                      <span class="card-id">{inc['id']}</span>
+                      <span class="card-title">{inc['title']}</span>
+                    </div>
+                    <div class="card-meta">
+                      <span>⏱ {inc['ts']}</span>
+                      <span>👤 {inc['parsed']['user']}@sentinel.local</span>
+                      <span>⬡ {inc['parsed']['host']}</span>
+                    </div>
+                    <div class="card-tags">
+                      {mitre_tag}{sev_tag(inc)}{act_tag}
+                    </div>
+                  </div>
+                  <div class="card-right">
+                    {pill_html(inc)}
+                    <div class="view-lbl">View Details ›</div>
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+                if st.button(f"Open {inc['id']}", key=f"btn_{inc['id']}"):
+                    st.session_state.selected_id = inc["id"]
+                    st.rerun()
+
+    else:
+        # ── DETAIL VIEW ──
+        inc = next((i for i in st.session_state.incidents if i["id"]==st.session_state.selected_id), None)
+
+        if st.button("← BACK TO INCIDENT QUEUE"):
+            st.session_state.selected_id = None
+            st.rerun()
+
+        if inc:
+            p = inc["parsed"]
+
+            # Header
+            st.markdown(f"""
+            <div class="detail-header">
+              <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;">
+                {ring_svg(inc['score'], inc['color'], 72)}
+                <div>
+                  <div style="font-family:Share Tech Mono,monospace;font-size:11px;
+                       color:rgba(255,255,255,0.35);margin-bottom:5px;">
+                       {inc['id']} &nbsp;·&nbsp; {inc['ts']}
+                  </div>
+                  <div class="detail-title">{inc['title']}</div>
+                  <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+                    {pill_html(inc)}
+                    <span class="tag tag-blue">MITRE: {inc['mitre_id']} — {inc['mitre_name']}</span>
+                    <span class="tag tag-gray">{inc['action'].replace('_',' ').upper()}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="detail-grid">
+                <div class="detail-row"><span class="detail-key">SOURCE IP</span><span class="detail-val">{p['src_ip']}</span></div>
+                <div class="detail-row"><span class="detail-key">USER</span><span class="detail-val">{p['user']}</span></div>
+                <div class="detail-row"><span class="detail-key">HOST</span><span class="detail-val">{p['host']}</span></div>
+                <div class="detail-row"><span class="detail-key">SERVICE</span><span class="detail-val">{p['service']}</span></div>
+                <div class="detail-row"><span class="detail-key">STATUS</span><span class="detail-val">{p['status'].upper()}</span></div>
+                <div class="detail-row"><span class="detail-key">RISK SCORE</span>
+                  <span class="detail-val" style="color:{inc['color']};">{inc['score']}/100</span></div>
+              </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Raw log
+            st.markdown(f"""
+            <div style="font-family:Share Tech Mono,monospace;font-size:11px;padding:14px 16px;
+                 background:#141414;border:1px solid rgba(255,255,255,0.07);border-radius:4px;
+                 color:rgba(255,255,255,0.55);word-break:break-all;line-height:1.8;margin-bottom:14px;">
+              <div style="font-size:9px;color:rgba(255,255,255,0.25);letter-spacing:3px;
+                   margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.05);">
+                   RAW LOG
+              </div>
+              {inc['raw']}
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Threat summary
+            st.markdown(f"""
+            <div class="threat-block {inc['cls']}">
+              EVENT_ID &nbsp;&nbsp; → {p['event_id']}<br/>
+              ACTION &nbsp;&nbsp;&nbsp; → {p['action'].upper()}<br/>
+              SOURCE_IP &nbsp; → {p['src_ip']}<br/>
+              USER &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → {p['user']}<br/>
+              RISK_SCORE &nbsp; → {inc['score']}/100 [{inc['level']}]<br/><br/>
+              ANALYSIS &nbsp;&nbsp; → {inc['analysis']}
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Playbook
+            steps_html = "".join(f"""
+            <div class="playbook-step">
+              <span class="step-num">{i:02d}</span><span>{step}</span>
+            </div>""" for i, step in enumerate(inc["playbook"], 1))
+            st.markdown(f'<div class="playbook-block">{steps_html}</div>', unsafe_allow_html=True)
+
+# ─────────────────────────────────────────
+# AUTO-REFRESH every 4 seconds
+# ─────────────────────────────────────────
+st.markdown("""
+<script>
+setTimeout(function(){ window.location.reload(); }, 4000);
+</script>
+""", unsafe_allow_html=True)
