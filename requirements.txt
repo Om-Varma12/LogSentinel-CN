@@ -2,9 +2,12 @@ streamlit
 pandas
 scikit-learn
 numpy
-joblib 
+joblib
 tqdm
 ipykernel
 langchain
 langchain-groq
 dotenv
+fastapi
+uvicorn[standard]
+requests
