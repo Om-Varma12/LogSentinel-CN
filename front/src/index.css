@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 5.5%;
+    --foreground: 0 0% 94%;
+    --card: 0 0% 8.6%;
+    --card-foreground: 0 0% 94%;
+    --popover: 0 0% 8.6%;
+    --popover-foreground: 0 0% 94%;
+    --primary: 220 100% 65%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 7.8%;
+    --secondary-foreground: 0 0% 94%;
+    --muted: 0 0% 8.6%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 7.8%;
+    --accent-foreground: 0 0% 94%;
+    --destructive: 0 100% 63%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 100% / 0.07;
+    --input: 0 0% 100% / 0.07;
+    --ring: 220 100% 65%;
+    --radius: 4px;
+
+    /* SOC custom tokens */
+    --soc-bg: #0e0e0e;
+    --soc-surface: #161616;
+    --soc-surface2: #141414;
+    --soc-border: rgba(255, 255, 255, 0.07);
+    --soc-text: #f0f0f0;
+    --soc-text-dim: rgba(255, 255, 255, 0.4);
+    --soc-text-dimmer: rgba(255, 255, 255, 0.25);
+    --soc-red: #ff4444;
+    --soc-red-soft: #ff6666;
+    --soc-amber: #ffaa00;
+    --soc-amber-soft: #ffbb44;
+    --soc-green: #00cc55;
+    --soc-green-soft: #44cc77;
+    --soc-blue: #5096ff;
+    --soc-blue-soft: #66aaff;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    background-color: var(--soc-bg);
+    color: var(--soc-text);
+    font-family: 'Rajdhani', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--soc-bg); }
+  ::-webkit-scrollbar-thumb { background: var(--soc-border); border-radius: 4px; }
+}
+
+@layer utilities {
+  .font-display { font-family: 'Orbitron', sans-serif; }
+  .font-mono-soc { font-family: 'Share Tech Mono', monospace; }
+  .font-body { font-family: 'Rajdhani', sans-serif; }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.6); }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
