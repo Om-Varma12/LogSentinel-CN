@@ -1,8 +1,8 @@
 import streamlit as st
-import time
-import random
 import re
-from datetime import datetime
+import requests
+
+API_URL = "http://localhost:8000"
 
 st.set_page_config(
     page_title="SENTINEL // SOC Dashboard",
@@ -16,10 +16,8 @@ st.set_page_config(
 if "incidents"      not in st.session_state: st.session_state.incidents      = []
 if "selected_id"    not in st.session_state: st.session_state.selected_id    = None
 if "terminal_lines" not in st.session_state: st.session_state.terminal_lines = []
-if "inc_counter"    not in st.session_state: st.session_state.inc_counter    = 1000
-if "last_ingest"    not in st.session_state: st.session_state.last_ingest    = 0.0
-
-INGEST_INTERVAL = 4  # seconds
+if "last_index"     not in st.session_state: st.session_state.last_index     = 0
+if "done_notified"  not in st.session_state: st.session_state.done_notified  = False
 
 # ─────────────────────────────────────────
 # CSS
@@ -260,132 +258,120 @@ header    { visibility:hidden; }
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────
-# DATA
+# HELPERS
 # ─────────────────────────────────────────
-LOG_TEMPLATES = [
-    "2026-03-{d}T{h}:{m}:{s}Z server-01 auth ERROR EVENT_ID={id} SRC_IP=192.168.1.88 USER=admin ACTION=login STATUS=failed MESSAGE='Multiple failed login attempts detected'",
-    "2026-03-{d}T{h}:{m}:{s}Z firewall-01 network ALERT EVENT_ID={id} SRC_IP=10.0.0.{r} USER=unknown ACTION=port_scan STATUS=blocked MESSAGE='Port scan detected targeting multiple ports'",
-    "2026-03-{d}T{h}:{m}:{s}Z server-02 network CRITICAL EVENT_ID={id} SRC_IP=172.16.0.{r} USER=system ACTION=data_transfer STATUS=allowed MESSAGE='Large outbound traffic to unknown external server'",
-    "2026-03-{d}T{h}:{m}:{s}Z server-01 auth WARN EVENT_ID={id} SRC_IP=10.10.{r}.5 USER=jsmith ACTION=login STATUS=failed MESSAGE='Failed login attempt for user account'",
-    "2026-03-{d}T{h}:{m}:{s}Z db-01 database CRITICAL EVENT_ID={id} SRC_IP=192.168.5.{r} USER=dbadmin ACTION=bulk_export STATUS=success MESSAGE='Unusual bulk data export detected from database'",
-    "2026-03-{d}T{h}:{m}:{s}Z vpn-gw auth ALERT EVENT_ID={id} SRC_IP=185.220.{r}.44 USER=unknown ACTION=brute_force STATUS=blocked MESSAGE='Brute force attack detected on VPN gateway'",
-    "2026-03-{d}T{h}:{m}:{s}Z server-03 process WARN EVENT_ID={id} SRC_IP=10.0.1.{r} USER=svc_account ACTION=privilege_escalation STATUS=attempted MESSAGE='Privilege escalation attempt via sudo'",
-    "2026-03-{d}T{h}:{m}:{s}Z endpoint-07 malware CRITICAL EVENT_ID={id} SRC_IP=10.20.{r}.12 USER=msingh ACTION=malware_exec STATUS=blocked MESSAGE='Ransomware execution attempt blocked by EDR'",
-]
-
-TITLES = {
-    "login":                "Failed Authentication Spike",
-    "port_scan":            "Port Scan Detected",
-    "data_transfer":        "Suspicious Data Exfiltration",
-    "bulk_export":          "Bulk Database Export Alert",
-    "brute_force":          "Brute Force Attack",
-    "privilege_escalation": "Privilege Escalation Attempt",
-    "malware_exec":         "Malware Execution Blocked",
-}
-
-MITRE = {
-    "login":                ("T1110", "Brute Force"),
-    "port_scan":            ("T1046", "Network Discovery"),
-    "data_transfer":        ("T1041", "Exfiltration"),
-    "bulk_export":          ("T1530", "Data from Cloud"),
-    "brute_force":          ("T1110", "Brute Force"),
-    "privilege_escalation": ("T1068", "Exploit Privilege"),
-    "malware_exec":         ("T1204", "User Execution"),
-}
-
-# ─────────────────────────────────────────
-# PARSERS / BUILDERS
-# ─────────────────────────────────────────
-def parse_log(log):
-    m = re.search(r'(\S+) (\S+) (\S+) (\S+) EVENT_ID=(\d+) SRC_IP=(\S+) USER=(\S+) ACTION=(\S+) STATUS=(\S+)', log)
-    if m:
-        return {"timestamp":m.group(1),"host":m.group(2),"service":m.group(3),
-                "level":m.group(4),"event_id":m.group(5),"src_ip":m.group(6),
-                "user":m.group(7),"action":m.group(8),"status":m.group(9)}
-    return None
-
-def calculate_risk(log):
-    s = 0
-    if "failed"               in log: s += 15
-    if "port_scan"            in log: s += 40
-    if "data_transfer"        in log: s += 35
-    if "bulk_export"          in log: s += 45
-    if "brute_force"          in log: s += 50
-    if "privilege_escalation" in log: s += 55
-    if "malware_exec"         in log: s += 70
-    if "CRITICAL"             in log: s += 20
-    if "ERROR"                in log: s += 15
-    if "ALERT"                in log: s += 25
-    if "WARN"                 in log: s += 10
-    return min(s, 100)
-
 def risk_level(score):
     if score <= 30: return "LOW",    "#00cc55", "low"
     if score <= 60: return "MEDIUM", "#ffaa00", "medium"
     return               "HIGH",    "#ff4444", "high"
-
-def generate_raw():
-    now = datetime.now()
-    tpl = random.choice(LOG_TEMPLATES)
-    raw = tpl.format(d=f"{now.day:02d}", h=f"{now.hour:02d}",
-                     m=f"{now.minute:02d}", s=f"{now.second:02d}",
-                     id=st.session_state.inc_counter, r=random.randint(1,254))
-    st.session_state.inc_counter += 1
-    return raw
-
-def build_incident(raw):
-    p = parse_log(raw)
-    if not p: return None
-    score = calculate_risk(raw)
-    lvl, color, cls = risk_level(score)
-    action = p["action"]
-    mid, mname = MITRE.get(action, ("T0000","Unknown"))
-    steps = [
-        f"Isolate {p['src_ip']} and cross-reference threat intelligence feeds",
-        f"Audit all recent activity for user '{p['user']}' across systems",
-        f"{'Block' if score>=50 else 'Monitor'} {p['src_ip']} at the perimeter firewall {'immediately' if score>=50 else 'for next 24h'}",
-        "Notify Tier-2 SOC analyst and open escalation ticket",
-        "Collect forensic artifacts from affected host" if score>=60 else "Schedule review of affected account permissions",
-        "Update SIEM detection rule to capture future variants",
-        "File post-incident report and brief stakeholders",
-    ]
-    analysis = (
-        f"Suspicious {action.replace('_',' ')} activity detected from {p['src_ip']}. "
-        f"Risk classified as {lvl} ({score}/100). "
-        + ("Immediate containment and forensic investigation advised." if score>=60
-           else "Enhanced monitoring and investigation recommended." if score>=30
-           else "Low-priority review. No immediate action required.")
-    )
-    return {
-        "id": f"#{p['event_id']}", "title": TITLES.get(action, action.replace("_"," ").title()),
-        "raw": raw, "parsed": p, "score": score, "level": lvl,
-        "color": color, "cls": cls, "mitre_id": mid, "mitre_name": mname,
-        "action": action, "ts": p["timestamp"][11:19]+" UTC",
-        "playbook": steps, "analysis": analysis,
-    }
 
 def add_terminal(txt, style="lo"):
     st.session_state.terminal_lines.append((txt, style))
     if len(st.session_state.terminal_lines) > 80:
         st.session_state.terminal_lines = st.session_state.terminal_lines[-80:]
 
-# ─────────────────────────────────────────
-# INGEST ENGINE  (fires each rerun if interval elapsed)
-# ─────────────────────────────────────────
-now_ts = time.time()
-if now_ts - st.session_state.last_ingest >= INGEST_INTERVAL:
-    raw = generate_raw()
-    inc = build_incident(raw)
-    if inc:
-        st.session_state.incidents.insert(0, inc)
+def derive_title(method, endpoint, status_code):
+    ep = endpoint.lower()
+    if "login"  in ep: return "Authentication Attempt"
+    if "admin"  in ep: return "Admin Endpoint Access"
+    if "config" in ep: return "Config File Access"
+    if method == "DELETE": return "Destructive Operation Detected"
+    if method == "PUT":    return "Data Modification Request"
+    if status_code >= 500: return "Server Error Triggered"
+    if status_code >= 400: return "Suspicious Client Request"
+    return f"{method} Request — {endpoint[:25]}"
+
+def derive_mitre(method, endpoint, client_info):
+    ep = endpoint.lower()
+    ci = client_info.lower()
+    if "sqlmap" in ci:     return "T1190", "Exploit Public App"
+    if "login"  in ep:     return "T1110", "Brute Force"
+    if "admin"  in ep:     return "T1078", "Valid Accounts"
+    if "config" in ep:     return "T1552", "Unsecured Credentials"
+    if method == "DELETE": return "T1485", "Data Destruction"
+    if method == "PUT":    return "T1565", "Data Manipulation"
+    return "T1071", "App Layer Protocol"
+
+def build_incident_from_api(data, abs_index):
+    p        = data["parsed"]
+    score    = int(round(data["risk_score"]))
+    lvl, color, cls = risk_level(score)
+    method   = p["Request Method"]
+    endpoint = p["Request"].split()[0]
+    status   = p["Status Code"]
+    client   = p.get("Client s/w info", "")
+    mid, mname = derive_mitre(method, endpoint, client)
+
+    ts_match = re.search(r':(\d{2}:\d{2}:\d{2})', p["Timestamp"])
+    ts = ts_match.group(1) + " UTC" if ts_match else p["Timestamp"]
+
+    playbook_lines = [ln.strip() for ln in data["playbook"].splitlines() if ln.strip()]
+
+    inc = {
+        "id":         f"#INC-{1000 + abs_index + 1}",
+        "title":      derive_title(method, endpoint, status),
+        "raw":        data["raw"],
+        "parsed":     p,
+        "endpoint":   endpoint,
+        "score":      score,
+        "level":      lvl,
+        "color":      color,
+        "cls":        cls,
+        "mitre_id":   mid,
+        "mitre_name": mname,
+        "action":     f"{method} {endpoint}",
+        "ts":         ts,
+        "analysis":   data["summary"],
+        "playbook":   playbook_lines,
+    }
+
+    sty = "ok" if score <= 30 else "warn" if score <= 60 else "err"
+    add_terminal(f"[IN]    Log ingested → {inc['id']}", "lo")
+    add_terminal(f"[PARSE] {method} {endpoint} | {status}", "lo")
+    add_terminal(f"[RISK]  {score}/100 → {lvl} THREAT", sty)
+    add_terminal(f"[QUEUE] {inc['id']} — {inc['title'][:35]}", "hi")
+    return inc
+
+def fetch_new_incidents():
+    try:
+        resp = requests.get(
+            f"{API_URL}/incidents",
+            params={"since": st.session_state.last_index},
+            timeout=2,
+        )
+        if resp.status_code != 200:
+            return None
+
+        data      = resp.json()
+        new_items = data.get("incidents", [])
+        total     = data.get("total", 0)
+        status    = data.get("status", {})
+
+        offset = st.session_state.last_index
+        for i, item in enumerate(new_items):
+            inc = build_incident_from_api(item, offset + i)
+            st.session_state.incidents.insert(0, inc)
+        st.session_state.last_index = total
+
         if len(st.session_state.incidents) > 50:
             st.session_state.incidents = st.session_state.incidents[:50]
-        add_terminal(f"[IN]    Log ingested → {inc['id']}", "lo")
-        add_terminal(f"[PARSE] {inc['action'].upper()} | SRC:{inc['parsed']['src_ip']}", "lo")
-        sty = "ok" if inc["score"]<=30 else "warn" if inc["score"]<=60 else "err"
-        add_terminal(f"[RISK]  {inc['score']}/100 → {inc['level']} THREAT", sty)
-        add_terminal(f"[QUEUE] {inc['id']} — {inc['title'][:35]}", "hi")
-    st.session_state.last_ingest = now_ts
+
+        if status.get("done") and not new_items and not st.session_state.done_notified:
+            add_terminal("[SYSTEM] Pipeline complete — all logs processed", "ok")
+            st.session_state.done_notified = True
+
+        return status
+    except requests.exceptions.ConnectionError:
+        add_terminal("[SYSTEM] Waiting for pipeline server...", "lo")
+        return None
+    except Exception as e:
+        add_terminal(f"[ERROR]  {str(e)[:60]}", "err")
+        return None
+
+# ─────────────────────────────────────────
+# INGEST ENGINE  (polls FastAPI on each rerun)
+# ─────────────────────────────────────────
+fetch_new_incidents()
 
 # ─────────────────────────────────────────
 # HTML HELPERS
@@ -496,7 +482,7 @@ with col_main:
         else:
             for inc in st.session_state.incidents:
                 mitre_tag = f'<span class="tag tag-blue">MITRE: {inc["mitre_id"]}</span>'
-                act_tag   = f'<span class="tag tag-gray">{inc["action"].replace("_"," ").upper()}</span>'
+                act_tag   = f'<span class="tag tag-gray">{inc["action"]}</span>'
 
                 st.markdown(f"""
                 <div class="inc-card {inc['cls']}">
@@ -508,8 +494,8 @@ with col_main:
                     </div>
                     <div class="card-meta">
                       <span>⏱ {inc['ts']}</span>
-                      <span>👤 {inc['parsed']['user']}@sentinel.local</span>
-                      <span>⬡ {inc['parsed']['host']}</span>
+                      <span>⬡ {inc['parsed']['IP']}</span>
+                      <span>↗ {inc['endpoint']}</span>
                     </div>
                     <div class="card-tags">
                       {mitre_tag}{sev_tag(inc)}{act_tag}
@@ -551,16 +537,16 @@ with col_main:
                   <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
                     {pill_html(inc)}
                     <span class="tag tag-blue">MITRE: {inc['mitre_id']} — {inc['mitre_name']}</span>
-                    <span class="tag tag-gray">{inc['action'].replace('_',' ').upper()}</span>
+                    <span class="tag tag-gray">{inc['action']}</span>
                   </div>
                 </div>
               </div>
               <div class="detail-grid">
-                <div class="detail-row"><span class="detail-key">SOURCE IP</span><span class="detail-val">{p['src_ip']}</span></div>
-                <div class="detail-row"><span class="detail-key">USER</span><span class="detail-val">{p['user']}</span></div>
-                <div class="detail-row"><span class="detail-key">HOST</span><span class="detail-val">{p['host']}</span></div>
-                <div class="detail-row"><span class="detail-key">SERVICE</span><span class="detail-val">{p['service']}</span></div>
-                <div class="detail-row"><span class="detail-key">STATUS</span><span class="detail-val">{p['status'].upper()}</span></div>
+                <div class="detail-row"><span class="detail-key">SOURCE IP</span><span class="detail-val">{p['IP']}</span></div>
+                <div class="detail-row"><span class="detail-key">METHOD</span><span class="detail-val">{p['Request Method']}</span></div>
+                <div class="detail-row"><span class="detail-key">ENDPOINT</span><span class="detail-val">{inc['endpoint']}</span></div>
+                <div class="detail-row"><span class="detail-key">STATUS CODE</span><span class="detail-val">{p['Status Code']}</span></div>
+                <div class="detail-row"><span class="detail-key">RESP SIZE</span><span class="detail-val">{p['Response Size']} B</span></div>
                 <div class="detail-row"><span class="detail-key">RISK SCORE</span>
                   <span class="detail-val" style="color:{inc['color']};">{inc['score']}/100</span></div>
               </div>
@@ -581,14 +567,14 @@ with col_main:
             """, unsafe_allow_html=True)
 
             # Threat summary
+            analysis_html = inc['analysis'].replace('\n', '<br/>')
             st.markdown(f"""
             <div class="threat-block {inc['cls']}">
-              EVENT_ID &nbsp;&nbsp; → {p['event_id']}<br/>
-              ACTION &nbsp;&nbsp;&nbsp; → {p['action'].upper()}<br/>
-              SOURCE_IP &nbsp; → {p['src_ip']}<br/>
-              USER &nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → {p['user']}<br/>
+              SOURCE_IP &nbsp; → {p['IP']}<br/>
+              METHOD &nbsp;&nbsp;&nbsp;&nbsp; → {p['Request Method']}<br/>
+              ENDPOINT &nbsp;&nbsp; → {inc['endpoint']}<span style="color:rgba(255,255,255,0.4);"> [{p['Status Code']}]</span><br/>
               RISK_SCORE &nbsp; → {inc['score']}/100 [{inc['level']}]<br/><br/>
-              ANALYSIS &nbsp;&nbsp; → {inc['analysis']}
+              {analysis_html}
             </div>
             """, unsafe_allow_html=True)
 
@@ -604,6 +590,6 @@ with col_main:
 # ─────────────────────────────────────────
 st.markdown("""
 <script>
-setTimeout(function(){ window.location.reload(); }, 4000);
+setTimeout(function(){ window.location.reload(); }, 3000);
 </script>
 """, unsafe_allow_html=True)
