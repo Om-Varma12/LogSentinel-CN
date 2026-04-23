@@ -21,13 +21,21 @@ def main(on_incident=None, status: dict = None):
         playbook = generate_playbook(parsedLog, riskScore)
 
         if on_incident is not None:
-            on_incident({
+            incident_data = {
                 "raw":        log.strip(),
                 "parsed":     parsedLog,
                 "risk_score": riskScore,
                 "summary":    summary,
                 "playbook":   playbook,
-            })
+            }
+            print(f"[DEBUG] Incident data being sent to frontend:")
+            print(f"  raw: {incident_data['raw'][:80]}...")
+            print(f"  parsed: {incident_data['parsed']}")
+            print(f"  risk_score: {incident_data['risk_score']}")
+            print(f"  summary: {incident_data['summary'][:100]}...")
+            print(f"  playbook: {incident_data['playbook'][:100]}...")
+            print("---")
+            on_incident(incident_data)
 
         time.sleep(2)
 

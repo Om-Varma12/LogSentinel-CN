@@ -1,3 +1,6 @@
+import joblib
+import pandas as pd
+
 def _ruleBasedAnalyzer(log: dict) -> int:
     score = 0
     endpoint = log["Request"].split()[0]
@@ -22,24 +25,24 @@ def _ruleBasedAnalyzer(log: dict) -> int:
     # that automates the process of detecting and exploiting SQL 
     # injection vulnerabilities in web applications.
     if "sqlmap" in userAgent:
-        score += 80
+        score += 50
 
     # why response time as a risk parameter?
     # typical backend response take max 1500 
     # and if it is taking more time, it may indicate that
     # attacker is triggering some kind of expensive operations on server 
-    # to slow down the server
+    # to slow it down
     if log["Request Processing Time"] > 2500:
         score += 5
 
+    score = min(score, 100)
     return score
 
-import joblib
-import pandas as pd
+# loading models globally only once!
+model = joblib.load("models/isolationForest.pkl")
+scaler = joblib.load("models/scaler.pkl")
 
 def _modelBasedAnalyzer(log: dict) -> int:
-    model = joblib.load("models/isolationForest.pkl")
-    scaler = joblib.load("models/scaler.pkl")
 
     endpoint = log["Request"].split()[0]
 

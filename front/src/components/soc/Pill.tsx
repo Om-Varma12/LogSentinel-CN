@@ -1,24 +1,34 @@
+import { motion } from "framer-motion";
+import type { Incident } from "./types";
+
 interface PillProps {
   level: string;
   label: string;
   type?: 'severity' | 'mitre' | 'action';
 }
 
-const styles: Record<string, string> = {
-  HIGH: "bg-[rgba(255,68,68,0.12)] text-soc-red-soft border-[rgba(255,68,68,0.25)]",
-  MEDIUM: "bg-[rgba(255,170,0,0.12)] text-soc-amber-soft border-[rgba(255,170,0,0.25)]",
-  LOW: "bg-[rgba(0,204,85,0.12)] text-soc-green-soft border-[rgba(0,204,85,0.25)]",
-  MITRE: "bg-[rgba(80,150,255,0.12)] text-soc-blue-soft border-[rgba(80,150,255,0.25)]",
-  ACTION: "bg-[rgba(255,255,255,0.05)] text-soc-text-dim border-[rgba(255,255,255,0.1)]",
+const styles: Record<string, { bg: string; text: string; border: string }> = {
+  HIGH: { bg: "bg-soc-red-muted", text: "text-soc-red", border: "border-soc-red-border" },
+  MEDIUM: { bg: "bg-soc-amber-muted", text: "text-soc-amber", border: "border-soc-amber-border" },
+  LOW: { bg: "bg-soc-green-muted", text: "text-soc-green", border: "border-soc-green-border" },
+  MITRE: { bg: "bg-soc-blue-muted", text: "text-soc-blue", border: "border-soc-blue-border" },
+  ACTION: { bg: "bg-soc-surface3", text: "text-soc-text-secondary", border: "border-soc-border" },
 };
 
 export default function Pill({ level, label, type = 'severity' }: PillProps) {
   const style = type === 'mitre' ? styles.MITRE : type === 'action' ? styles.ACTION : styles[level] || styles.LOW;
 
   return (
-    <div className={`px-2 py-0.5 rounded-[4px] border flex items-center gap-1.5 font-mono-soc text-[10px] tracking-wider uppercase ${style}`}>
-      {type === 'severity' && <div className="w-1.5 h-1.5 rounded-full bg-current" />}
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.2 }}
+      className={`px-2.5 py-1 rounded-md border flex items-center gap-1.5 font-mono-soc text-[11px] tracking-wide ${style.bg} ${style.text} ${style.border}`}
+    >
+      {type === 'severity' && (
+        <div className={`w-1.5 h-1.5 rounded-full ${style.text.replace('text-', 'bg-')}`} />
+      )}
       {label}
-    </div>
+    </motion.div>
   );
 }

@@ -4,7 +4,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from dotenv import load_dotenv
 load_dotenv()
 
-llm = ChatGroq(model = "openai/gpt-oss-120b")
+llm = ChatGroq(model = "meta-llama/llama-4-scout-17b-16e-instruct")
 
 with open('agents/SKILLS/summarizer_skill.md', 'r') as f:
     SKILL = f.read()
