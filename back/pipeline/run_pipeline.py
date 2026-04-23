@@ -37,7 +37,7 @@ def main(on_incident=None, status: dict = None):
             print("---")
             on_incident(incident_data)
 
-        time.sleep(2)
+        time.sleep(5)
 
     if status is not None:
         status["running"] = False

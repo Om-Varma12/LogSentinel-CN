@@ -26,7 +26,10 @@ export function transform(api: ApiIncident, absIdx: number): Incident {
   else if (status >= 500) title = "Server Error Triggered";
   else if (status >= 400) title = "Suspicious Client Request";
 
-  const tsMatch = api.parsed.Timestamp.match(/:(\d{2}:\d{2}:\d{2})/);
+  const now = new Date();
+
+  const now = new Date();
+  const ts = now.toLocaleTimeString("en-US", { hour12: false }) + " UTC";
 
   return {
     id: `#INC-${1000 + absIdx + 1}`,
@@ -41,7 +44,7 @@ export function transform(api: ApiIncident, absIdx: number): Incident {
     mitre_id: mitre.id,
     mitre_name: mitre.name,
     action: score > 70 ? "BLOCK_IP" : "MONITOR",
-    ts: tsMatch ? `${tsMatch[1]} UTC` : "00:00:00 UTC",
+    ts,
     analysis: api.summary,
     playbook: api.playbook.split("\n").map((line) => line.trim()).filter(Boolean),
   };
