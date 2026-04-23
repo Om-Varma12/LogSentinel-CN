@@ -27,8 +27,6 @@ export function transform(api: ApiIncident, absIdx: number): Incident {
   else if (status >= 400) title = "Suspicious Client Request";
 
   const now = new Date();
-
-  const now = new Date();
   const ts = now.toLocaleTimeString("en-US", { hour12: false }) + " UTC";
 
   return {
