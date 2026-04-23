@@ -1,0 +1,82 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - region "Notifications (F8)":
+      - list
+    - region "Notifications alt+T"
+    - generic [ref=e3]:
+      - generic [ref=e5]:
+        - generic [ref=e6]:
+          - link [ref=e7] [cursor=pointer]:
+            - /url: /
+            - img [ref=e8]
+          - generic [ref=e10]:
+            - heading "Analytics" [level=1] [ref=e11]
+            - paragraph [ref=e12]: Real-time incident insights
+        - generic [ref=e15]: LIVE UPDATES
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - generic [ref=e18]:
+            - generic [ref=e19]:
+              - img [ref=e21]
+              - generic [ref=e23]: Total
+            - generic [ref=e24]: "0"
+          - generic [ref=e25]:
+            - generic [ref=e26]:
+              - img [ref=e28]
+              - generic [ref=e30]: High
+            - generic [ref=e31]: "0"
+          - generic [ref=e32]:
+            - generic [ref=e33]:
+              - img [ref=e35]
+              - generic [ref=e38]: Critical
+            - generic [ref=e39]: "0"
+          - generic [ref=e40]:
+            - generic [ref=e41]:
+              - img [ref=e43]
+              - generic [ref=e45]: Monitored
+            - generic [ref=e46]: "0"
+        - generic [ref=e47]:
+          - generic [ref=e49]:
+            - img [ref=e50]
+            - generic [ref=e53]:
+              - heading "Severity" [level=3] [ref=e54]
+              - paragraph [ref=e55]: Distribution by level
+          - generic [ref=e57]:
+            - generic [ref=e58]:
+              - img [ref=e59]
+              - generic [ref=e62]:
+                - heading "Timeline" [level=3] [ref=e63]
+                - paragraph [ref=e64]: Incident trends over time
+            - img [ref=e68]:
+              - generic [ref=e73]:
+                - generic [ref=e75]: "0"
+                - generic [ref=e77]: "1"
+                - generic [ref=e79]: "2"
+                - generic [ref=e81]: "3"
+                - generic [ref=e83]: "4"
+            - generic [ref=e84]:
+              - generic [ref=e87]: High
+              - generic [ref=e90]: Medium
+              - generic [ref=e93]: Low
+          - generic [ref=e94]:
+            - generic [ref=e95]:
+              - img [ref=e96]
+              - generic [ref=e98]:
+                - heading "MITRE Tactics" [level=3] [ref=e99]
+                - paragraph [ref=e100]: Top attack patterns
+            - img [ref=e104]
+          - generic [ref=e108]:
+            - img [ref=e109]
+            - generic [ref=e111]:
+              - heading "Actions" [level=3] [ref=e112]
+              - paragraph [ref=e113]: Response distribution
+          - generic [ref=e115]:
+            - generic [ref=e116]:
+              - img [ref=e117]
+              - generic [ref=e119]:
+                - heading "Top Endpoints" [level=3] [ref=e120]
+                - paragraph [ref=e121]: Most targeted endpoints
+            - img [ref=e125]
+        - link "Back to Monitor" [ref=e130] [cursor=pointer]:
+          - /url: /
+  - generic [ref=e131]: "0"
