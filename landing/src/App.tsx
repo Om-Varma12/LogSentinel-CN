@@ -3,6 +3,7 @@ import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { FeaturesSection } from './components/FeaturesSection';
 import { ProblemSection } from './components/ProblemSection';
+import { HowItWorksSection } from './components/HowItWorksSection';
 import { BenchmarkSection } from './components/BenchmarkSection';
 import { PricingSection } from './components/PricingSection';
 import { CTASection } from './components/CTASection';
@@ -38,6 +39,7 @@ function App() {
         <Hero />
         <FeaturesSection />
         <ProblemSection />
+        <HowItWorksSection />
         <BenchmarkSection />
         <PricingSection />
         <CTASection />
