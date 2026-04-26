@@ -1,24 +1,7 @@
-"""
-Log generator for LogSentinel-CN pipeline.
-
-The pipeline (run_pipeline.py) calls get_logs() ONCE at startup,
-then iterates over the returned list with a 5-second gap between each log.
-
-Log format matches pipeline/parser.py expectations:
-  IP - - [timestamp] "METHOD /path HTTP/1.0" status size "-" "user-agent" proc_time
-
-Realistic endpoints: /api/v1/users, /login, /admin, /config, /health, etc.
-Risk-relevant patterns: sqlmap/nikto/nmap user-agents, DELETE/PUT methods,
-                        admin paths, login paths, high status codes, slow responses.
-"""
-
 import random
 import hashlib
 from datetime import datetime, timezone
 
-# ---------------------------------------------------------------------------
-# Realistic endpoint taxonomy — mirrors what the analyzer打分 logic expects
-# ---------------------------------------------------------------------------
 ENDPOINTS = {
     # Clean / low-risk
     "/api/v1/health":           {"methods": ["GET"],          "status": [200],             "weight": 25 },
@@ -60,9 +43,6 @@ for ep, cfg in ENDPOINTS.items():
     for _ in range(cfg["weight"]):
         _endpoint_pool.append((ep, cfg))
 
-# ---------------------------------------------------------------------------
-# User agents — normal + suspicious (triggers analyzer scoring)
-# ---------------------------------------------------------------------------
 USER_AGENTS = {
     "normal": [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
@@ -83,10 +63,6 @@ USER_AGENTS = {
         "masscan/1.3 (https://github.com/robertdavidgraham/masscan)",
     ],
 }
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 def _random_ip() -> str:
     return f"{random.randint(1, 223)}.{random.randint(0, 255)}.{random.randint(0, 255)}.{random.randint(1, 254)}"
@@ -126,10 +102,6 @@ def _proc_time(method: str, endpoint: str, status: int) -> int:
         base += random.randint(100, 400)
     return min(base, 10000)
 
-
-# ---------------------------------------------------------------------------
-# Main generation
-# ---------------------------------------------------------------------------
 
 def get_logs() -> list[str]:
     """
@@ -186,10 +158,6 @@ def get_logs() -> list[str]:
 
     return logs
 
-
-# ---------------------------------------------------------------------------
-# Dev / CLI test
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     print(f"Generating {20} sample logs...\n")

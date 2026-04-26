@@ -6,24 +6,25 @@ import { ArrowLeft } from "lucide-react";
 import { useMemo, useRef } from "react";
 
 const COLORS = {
-  red: "#ef4444",
-  amber: "#f59e0b",
-  green: "#10b981",
-  blue: "#3b82f6",
+  red: "var(--soc-red)",
+  amber: "var(--soc-amber)",
+  green: "var(--soc-green)",
+  blue: "var(--soc-blue)",
   purple: "#a855f7",
   cyan: "#06b6d4",
 };
 
 // Superdesign color palette
 const SD = {
-  bg: "#050505",
-  text: "#ebebeb",
-  textMuted: "rgba(250,250,250,0.4)",
-  textDimmest: "rgba(250,250,250,0.2)",
-  glassBg: "rgba(255,255,255,0.02)",
-  glassBorder: "rgba(255,255,255,0.1)",
-  emerald: "#10b981",
-  surface: "rgba(255,255,255,0.05)",
+  bg: "var(--soc-bg)",
+  text: "var(--soc-text)",
+  textMuted: "var(--soc-text-secondary)",
+  textTertiary: "var(--soc-text-tertiary)",
+  textDimmest: "var(--soc-text-quaternary)",
+  glassBg: "var(--soc-surface)",
+  glassBorder: "var(--soc-border)",
+  emerald: "var(--soc-green)",
+  surface: "var(--soc-surface2)",
 };
 
 // Spotlight card cursor effect
@@ -66,7 +67,7 @@ function SpotlightCard({
       <div
         className="pointer-events-none absolute inset-0 z-0 opacity-0 transition-opacity duration-500"
         style={{
-          background: `radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(16, 185, 129, 0.12), transparent 40%)`,
+          background: `radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(34, 197, 94, 0.12), transparent 40%)`,
         }}
         id="spotlight-glow"
       />
@@ -115,7 +116,7 @@ function DonutChart({
   return (
     <div className="relative aspect-square w-full max-w-[240px] mx-auto">
       <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-        <circle cx={cx} cy={cy} r={radius} fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth={strokeWidth} />
+        <circle cx={cx} cy={cy} r={radius} fill="transparent" stroke={SD.glassBorder} strokeWidth={strokeWidth} />
         {segments.map((seg, i) => (
           <circle
             key={i}
@@ -195,7 +196,7 @@ function TimelineChart({ data }: { data: { time: string; high: number; medium: n
               y1={tick.y}
               x2={width - padding}
               y2={tick.y}
-              stroke="rgba(255,255,255,0.06)"
+              stroke={SD.glassBorder}
               strokeDasharray="4"
             />
           ))}
@@ -226,7 +227,7 @@ function MiterBarChart({ data }: { data: { name: string; value: number }[] }) {
             <span>{item.name}</span>
             <span>{item.value}</span>
           </div>
-          <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
+          <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: SD.surface }}>
             <div
               className="h-full rounded-full transition-all duration-1000"
               style={{
@@ -242,23 +243,18 @@ function MiterBarChart({ data }: { data: { name: string; value: number }[] }) {
 }
 
 // Top endpoints bar chart
-function EndpointBars({ data }: { data: { name: string; value: number }[] }) {
+function EndpointBars({ data }: { data: { name: string; value: number; risk?: "low" | "medium" | "high" }[] }) {
   const maxVal = Math.max(...data.map((d) => d.value), 1);
+  const riskColor = (risk?: "low" | "medium" | "high") =>
+    risk === "high" ? COLORS.red : risk === "medium" ? COLORS.amber : COLORS.green;
   return (
-    <div className="flex items-end gap-10 h-[200px] px-4 overflow-x-auto">
-      {data.slice(0, 5).map((item, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-4">
+    <div className="flex items-end gap-6 h-[200px] px-4 overflow-x-auto">
+      {data.slice(0, 8).map((item, i) => (
+        <div key={i} className="flex-1 flex flex-col items-center gap-3">
           <div className="w-full rounded-t-lg relative group h-full flex flex-col justify-end">
             <div
-              className="w-full rounded-t-lg transition-all duration-1000"
-              style={{
-                height: `${(item.value / maxVal) * 100}%`,
-                background: "rgba(6, 182, 212, 0.2)",
-              }}
-            />
-            <div
               className="absolute inset-x-0 bottom-0 rounded-t-lg transition-all duration-1000"
-              style={{ height: `${(item.value / maxVal) * 100}%`, background: COLORS.cyan }}
+              style={{ height: `${maxVal > 0 ? (item.value / maxVal) * 100 : 0}%`, background: riskColor(item.risk) }}
             />
           </div>
           <span className="text-[9px] font-tech uppercase truncate w-full text-center" style={{ color: SD.textDimmest }}>
@@ -294,15 +290,71 @@ export default function Analytics() {
       .sort((a, b) => b.value - a.value);
   }, [incidents]);
 
+  // Predefined endpoint categories
+  const PREDEF_ENDPOINTS = [
+    // Low-risk (health/metrics/info)
+    { name: "/api/v1/health", risk: "low" as const },
+    { name: "/api/v1/metrics", risk: "low" as const },
+    { name: "/api/v1/users", risk: "low" as const },
+    { name: "/api/v1/dashboard", risk: "low" as const },
+    { name: "/api/v2/stream", risk: "low" as const },
+    { name: "/webhook", risk: "low" as const },
+    // Medium-risk (login/auth — brute-force targets)
+    { name: "/login", risk: "medium" as const },
+    { name: "/api/v1/auth/login", risk: "medium" as const },
+    { name: "/api/v1/auth/logout", risk: "medium" as const },
+    { name: "/register", risk: "medium" as const },
+    // High-risk (admin/config — sqlmap/scanner targets)
+    { name: "/admin", risk: "high" as const },
+    { name: "/admin/panel", risk: "high" as const },
+    { name: "/admin/users", risk: "high" as const },
+    { name: "/api/v1/settings", risk: "high" as const },
+    { name: "/api/v1/profile", risk: "high" as const },
+    { name: "/config", risk: "high" as const },
+    { name: "/etc/config", risk: "high" as const },
+    // Path traversal / enumeration targets
+    { name: "/usr", risk: "high" as const },
+    { name: "/bin", risk: "high" as const },
+    { name: "/api/v1/logs", risk: "medium" as const },
+    { name: "/api/v1/alerts", risk: "medium" as const },
+    // Destructive methods
+    { name: "_DELETE_", risk: "high" as const },
+    { name: "_PUT_", risk: "high" as const },
+  ];
+
   const endpointData = useMemo(() => {
     const counts: Record<string, number> = {};
+    PREDEF_ENDPOINTS.forEach(({ name }) => { counts[name] = 0; });
+
     incidents.forEach((inc) => {
-      const endpoint = inc.endpoint.split("/")[1] || inc.endpoint;
-      counts[endpoint] = (counts[endpoint] || 0) + 1;
+      const method = inc.parsed["Request Method"];
+      const ep = inc.endpoint;
+
+      // Check for DELETE/PUT first
+      if (method === "DELETE") {
+        counts["_DELETE_"] = (counts["_DELETE_"] || 0) + 1;
+      } else if (method === "PUT") {
+        counts["_PUT_"] = (counts["_PUT_"] || 0) + 1;
+      } else {
+        // Match predefined endpoints
+        const matched = PREDEF_ENDPOINTS.find(({ name }) =>
+          name !== "_DELETE_" && name !== "_PUT_" && ep.includes(name)
+        );
+        if (matched) {
+          counts[matched.name] = (counts[matched.name] || 0) + 1;
+        } else {
+          // Fallback: use first path segment
+          const seg = "/" + ep.split("/")[1];
+          counts[seg] = (counts[seg] || 0) + 1;
+        }
+      }
     });
-    return Object.entries(counts)
-      .map(([name, value]) => ({ name: name.slice(0, 15), value }))
-      .sort((a, b) => b.value - a.value);
+
+    return PREDEF_ENDPOINTS
+      .map(({ name, risk }) => ({ name, value: counts[name] || 0, risk }))
+      .filter((d) => d.value > 0)
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
   }, [incidents]);
 
   const actionData = useMemo(() => {
@@ -353,11 +405,11 @@ export default function Analytics() {
       {/* Background blobs */}
       <div
         className="fixed top-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full blur-[150px] z-0 pointer-events-none"
-        style={{ background: "rgba(16, 185, 129, 0.1)" }}
+        style={{ background: "rgba(34, 197, 94, 0.1)" }}
       />
       <div
         className="fixed bottom-[-10%] left-[-20%] w-[400px] h-[400px] rounded-full blur-[120px] z-0 pointer-events-none"
-        style={{ background: "rgba(16, 185, 129, 0.05)" }}
+        style={{ background: "rgba(34, 197, 94, 0.05)" }}
       />
 
       {/* Fixed Header */}
@@ -367,44 +419,35 @@ export default function Analytics() {
         transition={{ duration: 0.5 }}
         className="shrink-0 fixed top-0 left-0 right-0 h-20 z-50 flex items-center"
         style={{
-          background: "rgba(255,255,255,0.02)",
+          background: SD.glassBg,
           backdropFilter: "blur(12px)",
           WebkitBackdropFilter: "blur(12px)",
           borderBottom: `1px solid ${SD.glassBorder}`,
         }}
       >
-        <div className="max-w-7xl w-full mx-auto px-6 flex justify-between items-center">
+        <div className="w-full px-5 flex items-center">
           <div className="flex items-center gap-6">
             <Link
               to="/"
               className="w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:bg-white/10"
-              style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${SD.glassBorder}` }}
+              style={{ background: SD.surface, border: `1px solid ${SD.glassBorder}` }}
             >
-              <ArrowLeft className="w-5 h-5" style={{ color: "rgba(255,255,255,0.6)" }} />
+              <ArrowLeft className="w-5 h-5" style={{ color: SD.textMuted }} />
             </Link>
-            <div className="h-8 w-[1px]" style={{ background: "rgba(255,255,255,0.1)" }} />
+            <div className="h-8 w-[1px]" style={{ background: SD.glassBorder }} />
             <div>
               <h1 className="font-serif text-2xl tracking-tighter" style={{ color: SD.text }}>Analytics</h1>
-              <p className="text-[10px] font-tech tracking-[0.1em] uppercase" style={{ color: "rgba(250,250,250,0.4)" }}>Real-time incident insights</p>
+              <p className="text-[10px] font-tech tracking-[0.1em] uppercase" style={{ color: SD.textTertiary }}>Real-time incident insights</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 px-4 py-2 rounded-full" style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${SD.glassBorder}` }}>
-            <motion.div
-              animate={{ scale: [1, 1.2, 1] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: SD.emerald }}
-            />
-            <span className="font-tech text-[10px] tracking-[0.2em] uppercase" style={{ color: "rgba(255,255,255,0.6)" }}>Live Updates</span>
-          </div>
         </div>
       </motion.header>
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto pt-20 px-6 py-10 space-y-10 z-10">
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           <ShimmerCard delay={0.1} className="p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "rgba(59, 130, 246, 0.1)" }}>
@@ -470,7 +513,7 @@ export default function Analytics() {
                   <div key={item.name} className="flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                      <span style={{ color: "rgba(255,255,255,0.6)" }}>{item.name}</span>
+                      <span style={{ color: SD.textMuted }}>{item.name}</span>
                     </div>
                     <span className="font-tech">
                       {incidents.length > 0 ? Math.round((item.value / incidents.length) * 100) : 0}%
@@ -539,33 +582,33 @@ export default function Analytics() {
               </div>
               <div className="relative h-32 w-32 mx-auto">
                 <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-                  <circle cx="50" cy="50" r="40" fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="16" />
+                  <circle cx="50" cy="50" r="40" fill="transparent" stroke={SD.glassBorder} strokeWidth="16" />
                   {actionData.length > 0 ? (
                     <>
                       <circle cx="50" cy="50" r="40" fill="transparent" stroke={COLORS.green} strokeWidth="16" strokeDasharray="251" strokeDashoffset="100" />
                       <circle cx="50" cy="50" r="40" fill="transparent" stroke={COLORS.red} strokeWidth="16" strokeDasharray="251" strokeDashoffset="220" strokeLinecap="butt" style={{ transform: "rotate(150deg)", transformOrigin: "50px 50px" }} />
                     </>
                   ) : (
-                    <circle cx="50" cy="50" r="40" fill="transparent" stroke="rgba(255,255,255,0.1)" strokeWidth="16" />
+                    <circle cx="50" cy="50" r="40" fill="transparent" stroke={SD.glassBorder} strokeWidth="16" />
                   )}
                 </svg>
               </div>
               <div className="mt-6 grid grid-cols-2 gap-4">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS.green }} />
-                  <span className="text-[10px] font-tech uppercase" style={{ color: "rgba(255,255,255,0.6)" }}>Monitor</span>
+                  <span className="text-[10px] font-tech uppercase" style={{ color: SD.textMuted }}>Monitor</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS.red }} />
-                  <span className="text-[10px] font-tech uppercase" style={{ color: "rgba(255,255,255,0.6)" }}>Block</span>
+                  <span className="text-[10px] font-tech uppercase" style={{ color: SD.textMuted }}>Block</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS.blue }} />
-                  <span className="text-[10px] font-tech uppercase" style={{ color: "rgba(255,255,255,0.6)" }}>Archive</span>
+                  <span className="text-[10px] font-tech uppercase" style={{ color: SD.textMuted }}>Archive</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS.purple }} />
-                  <span className="text-[10px] font-tech uppercase" style={{ color: "rgba(255,255,255,0.6)" }}>Escalate</span>
+                  <span className="text-[10px] font-tech uppercase" style={{ color: SD.textMuted }}>Escalate</span>
                 </div>
               </div>
             </ShimmerCard>

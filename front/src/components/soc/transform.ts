@@ -4,7 +4,8 @@ export function transform(api: ApiIncident, absIdx: number): Incident {
   const score = Math.round(api.risk_score);
   const level = score <= 30 ? "LOW" : score <= 60 ? "MEDIUM" : "HIGH";
   const color = level === "HIGH" ? "#ff4444" : level === "MEDIUM" ? "#ffaa00" : "#00cc55";
-  const endpoint = api.parsed.Request.split(" ")[0] || "/";
+  const requestParts = api.parsed.Request.split(" ");
+  const endpoint = requestParts[0] || "/";
   const method = api.parsed["Request Method"];
   const client = api.parsed["Client s/w info"] || "";
   const status = api.parsed["Status Code"];

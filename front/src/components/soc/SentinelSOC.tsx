@@ -69,20 +69,6 @@ export default function SentinelSOC() {
           </div>
         </div>
 
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.3, duration: 0.3 }}
-          className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-soc-surface border border-soc-border"
-        >
-          <motion.div
-            animate={{ scale: [1, 1.2, 1] }}
-            transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-            className="w-2 h-2 rounded-full bg-soc-green"
-          />
-          <span className="text-xs font-medium text-soc-text-secondary tracking-wide">LIVE</span>
-        </motion.div>
-
         <Link
           to="/analytics"
           className="flex items-center gap-2 px-4 py-2 rounded-full bg-soc-surface border border-soc-border hover:border-soc-border-strong transition-colors"
