@@ -9,6 +9,7 @@ import { PricingSection } from './components/PricingSection';
 import { CTASection } from './components/CTASection';
 import { Footer } from './components/Footer';
 import { Atmosphere } from './components/Atmosphere';
+import { GhostCursor } from './components/GhostCursor';
 import './styles/design-system.css';
 
 function App() {
@@ -45,6 +46,21 @@ function App() {
         <CTASection />
       </main>
       <Footer />
+      <GhostCursor
+        color="#10b981"
+        trailLength={8}
+        inertia={0.2}
+        brightness={0.25}
+        bloomStrength={0.01}
+        bloomRadius={0.05}
+        bloomThreshold={0.95}
+        grainIntensity={0.005}
+        mixBlendMode="screen"
+        edgeIntensity={0}
+        fadeDelayMs={50}
+        fadeDurationMs={400}
+        zIndex={9999}
+      />
     </div>
   );
 }

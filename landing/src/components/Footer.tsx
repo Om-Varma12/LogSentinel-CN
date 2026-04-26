@@ -40,7 +40,7 @@ export function Footer() {
       </div>
 
       <div className="max-w-7xl mx-auto px-10 mt-20 pt-10 border-t border-white/5">
-        <p className="font-tech text-[9px] tracking-[0.5em] uppercase text-white/20 text-center">&copy; 2024 Log-Sentinel Neural Dynamics // Established in the vacuum.</p>
+        <p className="font-tech text-[9px] tracking-[0.5em] uppercase text-white/20 text-center">&copy; 2026 Log-Sentinel | Developed by TEAM 3.</p>
       </div>
     </footer>
   );

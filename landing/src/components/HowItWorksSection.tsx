@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import '../styles/design-system.css';
@@ -49,19 +49,19 @@ const steps = [
 export function HowItWorksSection() {
   const sectionRef = useRef<HTMLElement>(null);
   const lineRef = useRef<SVGPathElement>(null);
-  const progressRef = useRef<HTMLSpanElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [showProgress, setShowProgress] = useState(false);
+  const [progressValue, setProgressValue] = useState(0);
 
   useEffect(() => {
     const section = sectionRef.current;
     const line = lineRef.current;
-    const progressLabel = progressRef.current;
     const container = containerRef.current;
 
-    if (!section || !line || !progressLabel || !container) return;
+    if (!section || !line || !container) return;
 
     const ctx = gsap.context(() => {
-      // Animate the vertical line on scroll - only within this section
+      // Animate the vertical line on scroll
       gsap.fromTo(
         line,
         { strokeDashoffset: 1000 },
@@ -72,20 +72,30 @@ export function HowItWorksSection() {
             trigger: container,
             start: 'top center',
             end: 'bottom center',
-            scrub: 0.5,
+            scrub: true,
           },
         }
       );
 
-      // Animate progress counter
+      // Show/hide progress counter based on section visibility
       ScrollTrigger.create({
         trigger: container,
         start: 'top center',
         end: 'bottom center',
-        scrub: 1,
+        onEnter: () => setShowProgress(true),
+        onLeave: () => setShowProgress(false),
+        onEnterBack: () => setShowProgress(true),
+        onLeaveBack: () => setShowProgress(false),
+      });
+
+      // Update progress value
+      ScrollTrigger.create({
+        trigger: container,
+        start: 'top center',
+        end: 'bottom center',
+        scrub: true,
         onUpdate: (self) => {
-          const progress = Math.round(self.progress * 100);
-          progressLabel.innerText = progress.toString().padStart(2, '0');
+          setProgressValue(Math.round(self.progress * 100));
         },
       });
 
@@ -200,30 +210,19 @@ export function HowItWorksSection() {
                   </>
                 )}
               </div>
-              {step.showNode && (
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 hidden md:block">
-                  <div className="absolute inset-0 bg-emerald-500 rounded-full" style={{ boxShadow: '0 0 15px 2px rgba(16, 185, 129, 0.4)' }} />
-                  <div className="absolute inset-0 bg-emerald-500 rounded-full animate-pulse" />
-                </div>
-              )}
-              {step.isFinal && (
-                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 z-30 hidden md:block">
-                  <div className="absolute inset-0 bg-emerald-500 rounded-full" style={{ boxShadow: '0 0 15px 2px rgba(16, 185, 129, 0.4)' }} />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-black"><polyline points="20 6 9 17 4 12"/></svg>
-                  </div>
-                  <div className="absolute inset-0 bg-emerald-500 rounded-full animate-ping opacity-30" />
-                </div>
-              )}
             </div>
           ))}
         </div>
       </div>
 
       {/* Progress Counter */}
-      <div className="fixed bottom-8 right-8 z-50 hidden md:block">
+      <div
+        className={`fixed bottom-8 right-8 z-50 hidden md:block transition-opacity duration-300 ${showProgress ? 'opacity-100' : 'opacity-0'}`}
+      >
         <div className="flex items-end gap-2">
-          <span ref={progressRef} className="text-6xl font-black tracking-tighter text-white">00</span>
+          <span className="text-6xl font-black tracking-tighter text-white">
+            {progressValue.toString().padStart(2, '0')}
+          </span>
           <span className="text-emerald-500 text-xl font-bold pb-2">%</span>
         </div>
       </div>

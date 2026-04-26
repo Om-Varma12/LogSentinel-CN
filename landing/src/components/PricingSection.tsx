@@ -30,7 +30,7 @@ export function PricingSection() {
   return (
     <section id="pricing" className="max-w-7xl mx-auto px-10 py-40">
       <div className="mb-24 text-center reveal">
-        <h2 className="font-serif text-6xl tracking-tighter">Neural Access Tiers</h2>
+        <h2 className="font-serif text-6xl tracking-tighter">Access Tiers</h2>
         <p className="text-white/40 mt-6">Scalable intelligence for systems of any magnitude.</p>
       </div>
 
