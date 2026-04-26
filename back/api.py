@@ -1,4 +1,5 @@
 import asyncio
+import json
 import threading
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -11,6 +12,9 @@ RISK_THRESHOLD = 0
 shared_incidents: list = []
 pipeline_status: dict = {"running": False, "done": False}
 
+# Flag to track if dashboard is actively viewing logs
+dashboard_active: bool = False
+
 # One asyncio.Queue per live WebSocket client
 _active_queues: set = set()
 
@@ -20,8 +24,10 @@ _main_loop: asyncio.AbstractEventLoop | None = None
 
 def _broadcast(msg: dict) -> None:
     """Schedule a push to every connected client (called inside the event loop)."""
-    for q in list(_active_queues):
-        q.put_nowait(msg)
+    # Only broadcast incidents if dashboard is active; always broadcast control messages
+    if msg["type"] != "incident" or dashboard_active:
+        for q in list(_active_queues):
+            q.put_nowait(msg)
 
 
 def _on_incident(item: dict) -> None:
@@ -57,16 +63,17 @@ app.add_middleware(
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    global dashboard_active
     await websocket.accept()
 
     # Snapshot existing incidents and register queue — no await between these
     # two lines so there is no race with the pipeline thread
-    snapshot = list(shared_incidents)
+    snapshot = list(shared_incidents) if dashboard_active else []
     q: asyncio.Queue = asyncio.Queue()
     _active_queues.add(q)
 
     try:
-        # Replay incidents already processed before this client connected
+        # Replay incidents only if dashboard is already active
         for inc in snapshot:
             await websocket.send_json({"type": "incident", "data": inc})
 
@@ -75,12 +82,32 @@ async def websocket_endpoint(websocket: WebSocket):
             await websocket.send_json({"type": "done"})
             return
 
-        # Stream live until pipeline signals done
+        # Listen for control messages and stream live until pipeline signals done
         while True:
-            msg = await q.get()
-            await websocket.send_json(msg)
-            if msg["type"] == "done":
-                break
+            # Check for client control messages (non-blocking)
+            try:
+                msg = await asyncio.wait_for(websocket.receive_text(), timeout=0.1)
+                control = json.loads(msg)
+                
+                if control.get("type") == "activate":
+                    dashboard_active = True
+                    # Replay all incidents when dashboard activates
+                    for inc in shared_incidents:
+                        await websocket.send_json({"type": "incident", "data": inc})
+                    
+            except asyncio.TimeoutError:
+                pass  # No message; continue to check queue
+            except Exception:
+                break  # Client disconnected or invalid message
+
+            # Check for pipeline messages
+            try:
+                msg = await asyncio.wait_for(q.get(), timeout=0.1)
+                await websocket.send_json(msg)
+                if msg["type"] == "done":
+                    break
+            except asyncio.TimeoutError:
+                pass  # No message; loop continues
 
     except WebSocketDisconnect:
         pass

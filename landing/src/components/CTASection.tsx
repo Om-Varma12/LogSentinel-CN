@@ -10,9 +10,18 @@ export function CTASection() {
         <p className="text-white/40 text-xl font-light max-w-2xl mx-auto leading-relaxed">
           Secure your infrastructure with the intelligence it deserves. Join 2,000+ security teams monitoring with Log-Sentinel.
         </p>
-        <button className="px-16 py-8 bg-white text-black rounded-full font-tech text-sm font-bold tracking-[0.3em] uppercase pulse-glow hover:bg-emerald-500 transition-colors duration-500 active:scale-95 group">
-          Initialize Sentinel <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline-block ml-2 transition-transform group-hover:translate-x-2"><path d="M5 12h14"/><path d="M12 5l7 7-7 7"/></svg>
-        </button>
+        <a
+          href="http://localhost:8080/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-block px-16 py-8 bg-white text-black rounded-full font-tech text-sm font-bold tracking-[0.3em] uppercase pulse-glow hover:bg-emerald-500 transition-colors duration-500 active:scale-95 group"
+        >
+          Initialize Sentinel{' '}
+          <iconify-icon
+            icon="lucide:arrow-right"
+            className="inline-block ml-2 transition-transform group-hover:translate-x-2"
+          />
+        </a>
       </div>
     </section>
   );

@@ -27,8 +27,9 @@ export function transform(api: ApiIncident, absIdx: number): Incident {
   else if (status >= 500) title = "Server Error Triggered";
   else if (status >= 400) title = "Suspicious Client Request";
 
-  const now = new Date();
-  const ts = now.toLocaleTimeString("en-US", { hour12: false }) + " UTC";
+  // Use actual timestamp from backend, fall back to current time
+  const timestampStr = api.parsed.Timestamp || new Date().toISOString();
+  const ts = new Date(timestampStr).toLocaleTimeString("en-US", { hour12: false }) + " UTC";
 
   return {
     id: `#INC-${1000 + absIdx + 1}`,

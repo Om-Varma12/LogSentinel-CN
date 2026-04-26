@@ -27,11 +27,6 @@ export function Hero() {
             Transform security noise into confident decisions in seconds. AI-powered threat triage for teams that can't afford to miss anything.
           </p>
 
-          {/* CTAs */}
-          <div className="flex flex-wrap gap-6">
-            <a href="#demo" id="hero-primary" className="px-10 py-5 bg-white text-black rounded-full font-tech text-xs font-bold tracking-widest uppercase hover:bg-emerald-500 transition-colors duration-500 shadow-xl">Deploy Assistant</a>
-            <a href="#playbook" id="hero-secondary" className="px-10 py-5 border border-white/20 text-white rounded-full font-tech text-xs font-bold tracking-widest uppercase hover:bg-white/5 transition-colors">View Playbook</a>
-          </div>
         </div>
 
         {/* Floating UI Mockup */}

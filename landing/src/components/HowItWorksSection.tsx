@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { createPortal } from 'react-dom';
 import '../styles/design-system.css';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -124,6 +125,19 @@ export function HowItWorksSection() {
     return () => ctx.revert();
   }, []);
 
+  const progressCounter = (
+    <div
+      className={`fixed bottom-8 right-8 z-50 hidden md:block transition-opacity duration-300 ${showProgress ? 'opacity-100' : 'opacity-0'}`}
+    >
+      <div className="flex items-end gap-2">
+        <span className="text-6xl font-black tracking-tighter text-white">
+          {progressValue.toString().padStart(2, '0')}
+        </span>
+        <span className="text-emerald-500 text-xl font-bold pb-2">%</span>
+      </div>
+    </div>
+  );
+
   return (
     <section ref={sectionRef} className="relative min-h-screen bg-[#050505] py-40">
       <div className="max-w-7xl mx-auto px-10">
@@ -170,11 +184,6 @@ export function HowItWorksSection() {
                         <span className="text-emerald-500 italic">{step.titleItalic}</span>
                       </h2>
                       <p className="text-gray-400 text-lg leading-relaxed">{step.description}</p>
-                      {step.showCTA && (
-                        <button className="mt-8 px-8 py-3 bg-emerald-500 text-black font-bold uppercase tracking-tighter hover:bg-emerald-400 transition-all">
-                          View Live Protocol
-                        </button>
-                      )}
                     </div>
                     <div className="hidden md:block" />
                   </>
@@ -193,9 +202,14 @@ export function HowItWorksSection() {
                             <span className="text-emerald-500 italic font-bold">{step.titleItalic}</span>
                           </h2>
                           <p className="text-gray-400 text-lg leading-relaxed">{step.description}</p>
-                          <button className="mt-10 px-10 py-4 bg-emerald-500 text-black font-bold uppercase tracking-widest text-xs hover:bg-emerald-400 transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)]">
+                          <a
+                            href="http://localhost:8080/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block mt-10 px-10 py-4 bg-emerald-500 text-black font-bold uppercase tracking-widest text-xs hover:bg-emerald-400 transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)]"
+                          >
                             Access Dashboard
-                          </button>
+                          </a>
                         </div>
                       ) : (
                         <>
@@ -215,17 +229,7 @@ export function HowItWorksSection() {
         </div>
       </div>
 
-      {/* Progress Counter */}
-      <div
-        className={`fixed bottom-8 right-8 z-50 hidden md:block transition-opacity duration-300 ${showProgress ? 'opacity-100' : 'opacity-0'}`}
-      >
-        <div className="flex items-end gap-2">
-          <span className="text-6xl font-black tracking-tighter text-white">
-            {progressValue.toString().padStart(2, '0')}
-          </span>
-          <span className="text-emerald-500 text-xl font-bold pb-2">%</span>
-        </div>
-      </div>
+      {createPortal(progressCounter, document.body)}
     </section>
   );
 }

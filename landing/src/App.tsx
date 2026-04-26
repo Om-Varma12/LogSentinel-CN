@@ -5,11 +5,11 @@ import { FeaturesSection } from './components/FeaturesSection';
 import { ProblemSection } from './components/ProblemSection';
 import { HowItWorksSection } from './components/HowItWorksSection';
 import { BenchmarkSection } from './components/BenchmarkSection';
-import { PricingSection } from './components/PricingSection';
 import { CTASection } from './components/CTASection';
 import { Footer } from './components/Footer';
 import { Atmosphere } from './components/Atmosphere';
 import { GhostCursor } from './components/GhostCursor';
+import { SmoothScroll } from './components/SmoothScroll';
 import './styles/design-system.css';
 
 function App() {
@@ -36,16 +36,18 @@ function App() {
     <div className="min-h-screen relative">
       <Atmosphere />
       <Navbar />
-      <main>
-        <Hero />
-        <FeaturesSection />
-        <ProblemSection />
-        <HowItWorksSection />
-        <BenchmarkSection />
-        <PricingSection />
-        <CTASection />
-      </main>
-      <Footer />
+      <SmoothScroll>
+        <main>
+          <Hero />
+          <FeaturesSection />
+          <ProblemSection />
+          <HowItWorksSection />
+          <BenchmarkSection />
+          {/* <PricingSection /> */}
+          <CTASection />
+        </main>
+        <Footer />
+      </SmoothScroll>
       <GhostCursor
         color="#10b981"
         trailLength={8}

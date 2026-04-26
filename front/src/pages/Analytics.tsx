@@ -400,26 +400,63 @@ export default function Analytics() {
 
   const timeSeriesData = useMemo(() => {
     if (incidents.length === 0) return [];
-    // Bucket into 5-minute intervals
+    
+    // Parse timestamps and bucket into 5-minute intervals
     const intervalMs = 5 * 60 * 1000;
-    const startTime = Date.now() - (incidents.length - 1) * 5 * 1000;
-    const firstBucketTime = Math.floor(startTime / intervalMs) * intervalMs;
-
     const buckets: Record<number, { high: number; medium: number; low: number }> = {};
-    incidents.forEach((inc, idx) => {
-      const incidentTime = startTime + idx * 5 * 1000;
-      const bucketKey = Math.round((incidentTime - firstBucketTime) / intervalMs);
-      if (!buckets[bucketKey]) buckets[bucketKey] = { high: 0, medium: 0, low: 0 };
-      buckets[bucketKey][inc.level.toLowerCase() as "high" | "medium" | "low"]++;
+    
+    let earliestTime = Date.now();
+    let latestTime = 0;
+
+    // Parse incidents and find time range
+    incidents.forEach((inc) => {
+      try {
+        // Parse the timestamp (format: "HH:MM:SS UTC" or ISO)
+        const timeStr = inc.ts;
+        let incTime: number;
+        
+        if (timeStr.includes("UTC")) {
+          // Convert "HH:MM:SS UTC" to milliseconds from today
+          const parts = timeStr.split(" ")[0].split(":");
+          const hours = parseInt(parts[0]);
+          const minutes = parseInt(parts[1]);
+          const seconds = parseInt(parts[2]);
+          const today = new Date();
+          today.setHours(hours, minutes, seconds, 0);
+          incTime = today.getTime();
+        } else {
+          // Try parsing as ISO string
+          incTime = new Date(timeStr).getTime();
+        }
+        
+        earliestTime = Math.min(earliestTime, incTime);
+        latestTime = Math.max(latestTime, incTime);
+        
+        const bucketKey = Math.floor((incTime - earliestTime) / intervalMs);
+        if (!buckets[bucketKey]) buckets[bucketKey] = { high: 0, medium: 0, low: 0 };
+        buckets[bucketKey][inc.level.toLowerCase() as "high" | "medium" | "low"]++;
+      } catch (e) {
+        console.error("Failed to parse incident timestamp:", inc.ts, e);
+      }
     });
 
-    return Object.entries(buckets)
-      .sort(([a], [b]) => Number(a) - Number(b))
-      .map(([bucketIdx, counts]) => {
-        const ms = firstBucketTime + Number(bucketIdx) * intervalMs;
-        const ts = new Date(ms).toISOString().slice(11, 19);
-        return { time: ts, ...counts };
+    // Fill gaps with zero buckets for continuous timeline
+    const minBucket = 0;
+    const maxBucket = Math.ceil((latestTime - earliestTime) / intervalMs);
+    
+    const result = [];
+    for (let i = minBucket; i <= maxBucket; i++) {
+      const ms = earliestTime + i * intervalMs;
+      const ts = new Date(ms).toLocaleTimeString("en-US", { hour12: false });
+      result.push({
+        time: ts,
+        high: buckets[i]?.high || 0,
+        medium: buckets[i]?.medium || 0,
+        low: buckets[i]?.low || 0,
       });
+    }
+    
+    return result;
   }, [incidents]);
 
   const totalIncidents = incidents.length;
@@ -679,7 +716,7 @@ export default function Analytics() {
             Back to Monitor
           </Link>
           <p className="text-[9px] font-tech uppercase tracking-[0.5em]" style={{ color: "rgba(255,255,255,0.1)" }}>
-            Neural Dynamics // Analytics Engine v2.4
+            &copy; 2026 Log-Sentinel | Developed by TEAM 3.
           </p>
         </footer>
       </div>
