@@ -28,7 +28,7 @@ export function Navbar() {
           <a href="#docs" id="nav-docs" className="nav-link font-tech text-[10px] tracking-[0.2em] uppercase text-white/40">Documentation</a>
         </div>
 
-        <a href="#signup" id="nav-cta" className="px-8 py-3 bg-emerald-500 text-black rounded-full font-tech text-[10px] font-bold tracking-[0.15em] uppercase pulse-glow transition-transform hover:scale-105 active:scale-95">Start Free Trial</a>
+        <a href="http://localhost:8080/" target="_blank" rel="noopener noreferrer" id="nav-cta" className="px-8 py-3 bg-emerald-500 text-black rounded-full font-tech text-[10px] font-bold tracking-[0.15em] uppercase pulse-glow transition-transform hover:scale-105 active:scale-95">Start Free Trial</a>
       </div>
     </nav>
   );

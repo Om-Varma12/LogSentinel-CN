@@ -3,13 +3,16 @@ import { createIncidentsSocket } from "@/lib/api";
 import { transform } from "@/components/soc/transform";
 import type { ApiIncident, Incident, TerminalLine } from "@/components/soc/types";
 
-const MAX_INCIDENTS = 50;
+const MAX_INCIDENTS = 200;
 const MAX_TERMINAL_LINES = 80;
 const RECONNECT_DELAY_MS = 2000;
 
 type WsMessage =
   | { type: "incident"; data: ApiIncident }
   | { type: "done" };
+
+type ControlMessage =
+  | { type: "activate" };
 
 function toTerminalLines(inc: Incident): TerminalLine[] {
   const riskStyle: TerminalLine["style"] =
@@ -32,6 +35,7 @@ export function useIncidentsStream() {
   const waitingNotifiedRef = useRef(false);
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activatedRef = useRef(false);
 
   useEffect(() => {
     function connect() {
@@ -42,6 +46,11 @@ export function useIncidentsStream() {
 
       ws.onopen = () => {
         waitingNotifiedRef.current = false;
+        // Send activation signal to backend to start streaming logs
+        if (!activatedRef.current) {
+          ws.send(JSON.stringify({ type: "activate" }));
+          activatedRef.current = true;
+        }
       };
 
       ws.onmessage = (event: MessageEvent) => {
@@ -79,6 +88,7 @@ export function useIncidentsStream() {
         // On reconnect backend replays from the beginning, so reset index and list
         reconnectTimerRef.current = setTimeout(() => {
           indexRef.current = 0;
+          activatedRef.current = false;
           setIncidents([]);
           connect();
         }, RECONNECT_DELAY_MS);

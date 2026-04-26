@@ -62,16 +62,6 @@ export function PricingSection() {
               ))}
             </ul>
 
-            <a
-              href="#"
-              className={`w-full py-4 rounded-full font-tech text-[10px] font-bold tracking-widest uppercase text-center transition-colors ${
-                tier.featured
-                  ? 'bg-emerald-500 text-black pulse-glow'
-                  : 'border border-white/20 hover:bg-white/5'
-              }`}
-            >
-              {tier.cta}
-            </a>
           </div>
         ))}
       </div>

@@ -6,24 +6,25 @@ import { ArrowLeft } from "lucide-react";
 import { useMemo, useRef } from "react";
 
 const COLORS = {
-  red: "#ef4444",
-  amber: "#f59e0b",
-  green: "#10b981",
-  blue: "#3b82f6",
+  red: "var(--soc-red)",
+  amber: "var(--soc-amber)",
+  green: "var(--soc-green)",
+  blue: "var(--soc-blue)",
   purple: "#a855f7",
   cyan: "#06b6d4",
 };
 
 // Superdesign color palette
 const SD = {
-  bg: "#050505",
-  text: "#ebebeb",
-  textMuted: "rgba(250,250,250,0.4)",
-  textDimmest: "rgba(250,250,250,0.2)",
-  glassBg: "rgba(255,255,255,0.02)",
-  glassBorder: "rgba(255,255,255,0.1)",
-  emerald: "#10b981",
-  surface: "rgba(255,255,255,0.05)",
+  bg: "var(--soc-bg)",
+  text: "var(--soc-text)",
+  textMuted: "var(--soc-text-secondary)",
+  textTertiary: "var(--soc-text-tertiary)",
+  textDimmest: "var(--soc-text-quaternary)",
+  glassBg: "var(--soc-surface)",
+  glassBorder: "var(--soc-border)",
+  emerald: "var(--soc-green)",
+  surface: "var(--soc-surface2)",
 };
 
 // Spotlight card cursor effect
@@ -66,7 +67,7 @@ function SpotlightCard({
       <div
         className="pointer-events-none absolute inset-0 z-0 opacity-0 transition-opacity duration-500"
         style={{
-          background: `radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(16, 185, 129, 0.12), transparent 40%)`,
+          background: `radial-gradient(600px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(34, 197, 94, 0.12), transparent 40%)`,
         }}
         id="spotlight-glow"
       />
@@ -100,32 +101,36 @@ function DonutChart({
   const cx = 50;
   const cy = 50;
 
-  let accumulatedOffset = 0;
+  // Build segments: each has dashLen (arc length) and where it starts in the circle
+  const segments: { dashLen: number; dashOffset: number; color: string }[] = [];
+  let accumulated = 0;
+
+  data.forEach((entry) => {
+    const proportion = total > 0 ? entry.value / total : 0;
+    const dashLen = circumference * proportion;
+    const dashOffset = circumference - accumulated;
+    segments.push({ dashLen, dashOffset, color: entry.color });
+    accumulated += dashLen;
+  });
 
   return (
     <div className="relative aspect-square w-full max-w-[240px] mx-auto">
       <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-        <circle cx={cx} cy={cy} r={radius} fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth={strokeWidth} />
-        {data.map((entry, i) => {
-          const pct = total > 0 ? entry.value / total : 0;
-          const dashLen = circumference * (pct * 100) / 100;
-          const dashOffset = circumference - accumulatedOffset;
-          accumulatedOffset += dashLen;
-          return (
-            <circle
-              key={i}
-              cx={cx}
-              cy={cy}
-              r={radius}
-              fill="transparent"
-              stroke={entry.color}
-              strokeWidth={strokeWidth}
-              strokeDasharray={`${dashLen} ${circumference - dashLen}`}
-              strokeDashoffset={dashOffset}
-              strokeLinecap="butt"
-            />
-          );
-        })}
+        <circle cx={cx} cy={cy} r={radius} fill="transparent" stroke={SD.glassBorder} strokeWidth={strokeWidth} />
+        {segments.map((seg, i) => (
+          <circle
+            key={i}
+            cx={cx}
+            cy={cy}
+            r={radius}
+            fill="transparent"
+            stroke={seg.color}
+            strokeWidth={strokeWidth}
+            strokeDasharray={`${seg.dashLen} ${circumference - seg.dashLen}`}
+            strokeDashoffset={seg.dashOffset}
+            strokeLinecap="butt"
+          />
+        ))}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="font-serif text-3xl tabular-nums">{total >= 1000 ? `${(total / 1000).toFixed(1)}k` : total}</span>
@@ -153,33 +158,59 @@ function TimelineChart({ data }: { data: { time: string; high: number; medium: n
     ? `M ${points.map((p) => `${p.x},${p.y}`).join(" T ") || `M ${padding},${height - padding}`}`
     : `M ${padding},${height - padding}`;
 
+  // Y-axis tick positions and labels
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((pct) => ({
+    y: padding + (height - padding * 2) * pct,
+    label: Math.round(maxVal * (1 - pct)),
+  }));
+
+  // X-axis: show every Nth label so they don't crowd
+  const labelStep = Math.max(1, Math.floor(data.length / 6));
+  const xLabels = data.filter((_, i) => i % labelStep === 0 || i === data.length - 1);
+
   return (
-    <div className="h-[240px] w-full relative">
-      <svg className="w-full h-full" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="gradEmerald" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" style={{ stopColor: SD.emerald, stopOpacity: 0.2 }} />
-            <stop offset="100%" style={{ stopColor: SD.emerald, stopOpacity: 0 }} />
-          </linearGradient>
-        </defs>
-        <path d={`${pathD} L ${width - padding},${height - padding} L ${padding},${height - padding} Z`} fill="url(#gradEmerald)" />
-        <path d={pathD} fill="none" stroke={SD.emerald} strokeWidth="2" />
-        {[0.25, 0.5, 0.75].map((pct, i) => (
-          <line
-            key={i}
-            x1={padding}
-            y1={padding + (height - padding * 2) * pct}
-            x2={width - padding}
-            y2={padding + (height - padding * 2) * pct}
-            stroke="rgba(255,255,255,0.06)"
-            strokeDasharray="4"
-          />
+    <div className="h-[240px] w-full relative flex">
+      {/* Y-axis labels */}
+      <div className="flex flex-col justify-between pr-3 pb-6" style={{ height: height - padding * 2 }}>
+        {yTicks.map((tick, i) => (
+          <span key={i} className="text-[9px] font-tech text-right leading-none" style={{ color: SD.textDimmest }}>
+            {tick.label}
+          </span>
         ))}
-      </svg>
-      <div className="flex justify-between mt-4 px-2">
-        {data.length > 0 && data.map((d, i) => (
-          <span key={i} className="text-[9px] font-tech uppercase" style={{ color: SD.textDimmest }}>{d.time}</span>
-        ))}
+      </div>
+
+      <div className="flex-1">
+        <svg className="w-full h-full" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="gradEmerald" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" style={{ stopColor: SD.emerald, stopOpacity: 0.2 }} />
+              <stop offset="100%" style={{ stopColor: SD.emerald, stopOpacity: 0 }} />
+            </linearGradient>
+          </defs>
+          <path d={`${pathD} L ${width - padding},${height - padding} L ${padding},${height - padding} Z`} fill="url(#gradEmerald)" />
+          <path d={pathD} fill="none" stroke={SD.emerald} strokeWidth="2" />
+          {yTicks.map((tick, i) => (
+            <line
+              key={i}
+              x1={padding}
+              y1={tick.y}
+              x2={width - padding}
+              y2={tick.y}
+              stroke={SD.glassBorder}
+              strokeDasharray="4"
+            />
+          ))}
+        </svg>
+        <div className="flex justify-between mt-2 px-1">
+          {xLabels.map((d, globalIdx) => {
+            const originalIdx = data.findIndex((x) => x === d);
+            return (
+              <span key={globalIdx} className="text-[9px] font-tech uppercase" style={{ color: SD.textDimmest }}>
+                {d.time}
+              </span>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -196,7 +227,7 @@ function MiterBarChart({ data }: { data: { name: string; value: number }[] }) {
             <span>{item.name}</span>
             <span>{item.value}</span>
           </div>
-          <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.05)" }}>
+          <div className="h-1.5 w-full rounded-full overflow-hidden" style={{ background: SD.surface }}>
             <div
               className="h-full rounded-full transition-all duration-1000"
               style={{
@@ -212,32 +243,108 @@ function MiterBarChart({ data }: { data: { name: string; value: number }[] }) {
 }
 
 // Top endpoints bar chart
-function EndpointBars({ data }: { data: { name: string; value: number }[] }) {
+function EndpointBars({ data }: { data: { name: string; value: number; risk?: "low" | "medium" | "high" }[] }) {
   const maxVal = Math.max(...data.map((d) => d.value), 1);
+  const riskColor = (risk?: "low" | "medium" | "high") =>
+    risk === "high" ? COLORS.red : risk === "medium" ? COLORS.amber : COLORS.green;
+
+  if (data.length === 0) {
+    return (
+      <div className="h-[200px] w-full flex items-center justify-center rounded-xl" style={{ border: `1px solid ${SD.glassBorder}`, background: SD.glassBg }}>
+        <span className="text-[10px] font-tech uppercase tracking-wider" style={{ color: SD.textDimmest }}>
+          Waiting for endpoint traffic...
+        </span>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-end gap-10 h-[200px] px-4 overflow-x-auto">
-      {data.slice(0, 5).map((item, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-4">
-          <div className="w-full rounded-t-lg relative group h-full flex flex-col justify-end">
+    <div className="h-[220px] w-full">
+      <div className="h-[188px] flex items-end gap-3 px-2 overflow-x-auto">
+      {data.slice(0, 8).map((item, i) => (
+        <div key={i} className="min-w-[88px] flex-1 h-full flex flex-col justify-end gap-2">
+          <div
+            className="h-full rounded-lg border p-1 flex items-end"
+            style={{ borderColor: SD.glassBorder, background: SD.glassBg }}
+          >
             <div
-              className="w-full rounded-t-lg transition-all duration-1000"
+              className="w-full rounded-md transition-all duration-1000"
               style={{
-                height: `${(item.value / maxVal) * 100}%`,
-                background: "rgba(6, 182, 212, 0.2)",
+                height: `${maxVal > 0 ? (item.value / maxVal) * 100 : 0}%`,
+                minHeight: item.value > 0 ? "8px" : "0px",
+                background: riskColor(item.risk),
               }}
             />
-            <div
-              className="absolute inset-x-0 bottom-0 rounded-t-lg transition-all duration-1000"
-              style={{ height: `${(item.value / maxVal) * 100}%`, background: COLORS.cyan }}
-            />
           </div>
-          <span className="text-[9px] font-tech uppercase truncate w-full text-center" style={{ color: SD.textDimmest }}>
+          <span className="text-[9px] font-tech tabular-nums text-center" style={{ color: SD.textMuted }}>
+            {item.value}
+          </span>
+          <span
+            className="text-[9px] font-tech uppercase truncate w-full text-center"
+            style={{ color: SD.textDimmest }}
+            title={item.name}
+          >
             {item.name}
           </span>
         </div>
       ))}
+      </div>
     </div>
   );
+}
+
+function normalizeEndpoint(rawEndpoint: string): string {
+  const trimmed = (rawEndpoint || "").trim();
+  if (!trimmed) return "/";
+
+  // Handle absolute URLs, plain paths, and any query/hash suffixes.
+  let path = trimmed;
+  if (!trimmed.startsWith("/")) {
+    try {
+      path = new URL(trimmed).pathname || "/";
+    } catch {
+      path = `/${trimmed}`;
+    }
+  }
+
+  path = path.split("?")[0]?.split("#")[0] || "/";
+  path = path.replace(/\/{2,}/g, "/");
+  if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+  return path || "/";
+}
+
+function endpointRisk(endpoint: string): "low" | "medium" | "high" {
+  const lowRisk = new Set([
+    "/api/v1/health",
+    "/api/v1/metrics",
+    "/api/v1/users",
+    "/api/v1/dashboard",
+    "/api/v2/stream",
+    "/webhook",
+  ]);
+
+  const mediumRisk = new Set([
+    "/login",
+    "/api/v1/auth/login",
+    "/api/v1/auth/logout",
+    "/register",
+    "/api/v1/logs",
+    "/api/v1/alerts",
+  ]);
+
+  if (
+    endpoint.includes("/admin") ||
+    endpoint.includes("/config") ||
+    endpoint === "/usr" ||
+    endpoint === "/bin" ||
+    endpoint === "/api/v1/settings" ||
+    endpoint === "/api/v1/profile"
+  ) {
+    return "high";
+  }
+  if (mediumRisk.has(endpoint)) return "medium";
+  if (lowRisk.has(endpoint)) return "low";
+  return "medium";
 }
 
 export default function Analytics() {
@@ -266,13 +373,18 @@ export default function Analytics() {
 
   const endpointData = useMemo(() => {
     const counts: Record<string, number> = {};
+
     incidents.forEach((inc) => {
-      const endpoint = inc.endpoint.split("/")[1] || inc.endpoint;
+      const requestPath = inc.parsed.Request?.split(" ")[0] || inc.endpoint;
+      const endpoint = normalizeEndpoint(requestPath);
       counts[endpoint] = (counts[endpoint] || 0) + 1;
     });
+
     return Object.entries(counts)
-      .map(([name, value]) => ({ name: name.slice(0, 15), value }))
-      .sort((a, b) => b.value - a.value);
+      .map(([name, value]) => ({ name, value, risk: endpointRisk(name) }))
+      .filter((d) => d.value > 0)
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 8);
   }, [incidents]);
 
   const actionData = useMemo(() => {
@@ -287,15 +399,64 @@ export default function Analytics() {
   }, [incidents]);
 
   const timeSeriesData = useMemo(() => {
-    const buckets: Record<string, { high: number; medium: number; low: number }> = {};
-    incidents.slice(0, 20).forEach((inc) => {
-      const timeKey = inc.ts.slice(0, 8) || "Recent";
-      if (!buckets[timeKey]) buckets[timeKey] = { high: 0, medium: 0, low: 0 };
-      buckets[timeKey][inc.level.toLowerCase() as "high" | "medium" | "low"]++;
+    if (incidents.length === 0) return [];
+    
+    // Parse timestamps and bucket into 5-minute intervals
+    const intervalMs = 5 * 60 * 1000;
+    const buckets: Record<number, { high: number; medium: number; low: number }> = {};
+    
+    let earliestTime = Date.now();
+    let latestTime = 0;
+
+    // Parse incidents and find time range
+    incidents.forEach((inc) => {
+      try {
+        // Parse the timestamp (format: "HH:MM:SS UTC" or ISO)
+        const timeStr = inc.ts;
+        let incTime: number;
+        
+        if (timeStr.includes("UTC")) {
+          // Convert "HH:MM:SS UTC" to milliseconds from today
+          const parts = timeStr.split(" ")[0].split(":");
+          const hours = parseInt(parts[0]);
+          const minutes = parseInt(parts[1]);
+          const seconds = parseInt(parts[2]);
+          const today = new Date();
+          today.setHours(hours, minutes, seconds, 0);
+          incTime = today.getTime();
+        } else {
+          // Try parsing as ISO string
+          incTime = new Date(timeStr).getTime();
+        }
+        
+        earliestTime = Math.min(earliestTime, incTime);
+        latestTime = Math.max(latestTime, incTime);
+        
+        const bucketKey = Math.floor((incTime - earliestTime) / intervalMs);
+        if (!buckets[bucketKey]) buckets[bucketKey] = { high: 0, medium: 0, low: 0 };
+        buckets[bucketKey][inc.level.toLowerCase() as "high" | "medium" | "low"]++;
+      } catch (e) {
+        console.error("Failed to parse incident timestamp:", inc.ts, e);
+      }
     });
-    return Object.entries(buckets)
-      .reverse()
-      .map(([time, counts]) => ({ time, ...counts }));
+
+    // Fill gaps with zero buckets for continuous timeline
+    const minBucket = 0;
+    const maxBucket = Math.ceil((latestTime - earliestTime) / intervalMs);
+    
+    const result = [];
+    for (let i = minBucket; i <= maxBucket; i++) {
+      const ms = earliestTime + i * intervalMs;
+      const ts = new Date(ms).toLocaleTimeString("en-US", { hour12: false });
+      result.push({
+        time: ts,
+        high: buckets[i]?.high || 0,
+        medium: buckets[i]?.medium || 0,
+        low: buckets[i]?.low || 0,
+      });
+    }
+    
+    return result;
   }, [incidents]);
 
   const totalIncidents = incidents.length;
@@ -311,11 +472,11 @@ export default function Analytics() {
       {/* Background blobs */}
       <div
         className="fixed top-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full blur-[150px] z-0 pointer-events-none"
-        style={{ background: "rgba(16, 185, 129, 0.1)" }}
+        style={{ background: "rgba(34, 197, 94, 0.1)" }}
       />
       <div
         className="fixed bottom-[-10%] left-[-20%] w-[400px] h-[400px] rounded-full blur-[120px] z-0 pointer-events-none"
-        style={{ background: "rgba(16, 185, 129, 0.05)" }}
+        style={{ background: "rgba(34, 197, 94, 0.05)" }}
       />
 
       {/* Fixed Header */}
@@ -325,44 +486,35 @@ export default function Analytics() {
         transition={{ duration: 0.5 }}
         className="shrink-0 fixed top-0 left-0 right-0 h-20 z-50 flex items-center"
         style={{
-          background: "rgba(255,255,255,0.02)",
+          background: SD.glassBg,
           backdropFilter: "blur(12px)",
           WebkitBackdropFilter: "blur(12px)",
           borderBottom: `1px solid ${SD.glassBorder}`,
         }}
       >
-        <div className="max-w-7xl w-full mx-auto px-6 flex justify-between items-center">
+        <div className="w-full px-5 flex items-center">
           <div className="flex items-center gap-6">
             <Link
               to="/"
               className="w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:bg-white/10"
-              style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${SD.glassBorder}` }}
+              style={{ background: SD.surface, border: `1px solid ${SD.glassBorder}` }}
             >
-              <ArrowLeft className="w-5 h-5" style={{ color: "rgba(255,255,255,0.6)" }} />
+              <ArrowLeft className="w-5 h-5" style={{ color: SD.textMuted }} />
             </Link>
-            <div className="h-8 w-[1px]" style={{ background: "rgba(255,255,255,0.1)" }} />
+            <div className="h-8 w-[1px]" style={{ background: SD.glassBorder }} />
             <div>
               <h1 className="font-serif text-2xl tracking-tighter" style={{ color: SD.text }}>Analytics</h1>
-              <p className="text-[10px] font-tech tracking-[0.1em] uppercase" style={{ color: "rgba(250,250,250,0.4)" }}>Real-time incident insights</p>
+              <p className="text-[10px] font-tech tracking-[0.1em] uppercase" style={{ color: SD.textTertiary }}>Real-time incident insights</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 px-4 py-2 rounded-full" style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${SD.glassBorder}` }}>
-            <motion.div
-              animate={{ scale: [1, 1.2, 1] }}
-              transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-              className="w-2 h-2 rounded-full"
-              style={{ backgroundColor: SD.emerald }}
-            />
-            <span className="font-tech text-[10px] tracking-[0.2em] uppercase" style={{ color: "rgba(255,255,255,0.6)" }}>Live Updates</span>
-          </div>
         </div>
       </motion.header>
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto pt-20 px-6 py-10 space-y-10 z-10">
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
           <ShimmerCard delay={0.1} className="p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: "rgba(59, 130, 246, 0.1)" }}>
@@ -414,7 +566,7 @@ export default function Analytics() {
             transition={{ duration: 0.8, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
             className="col-span-12 lg:col-span-4 lg:row-span-2"
           >
-            <ShimmerCard delay={0.5} className="p-8 h-full">
+            <ShimmerCard delay={0.5} className="p-8 h-full flex flex-col">
               <div className="flex items-center gap-3 mb-8">
                 <PieChartIcon className="text-xl" style={{ color: COLORS.blue }} />
                 <div>
@@ -422,19 +574,23 @@ export default function Analytics() {
                   <p className="text-[10px] font-tech uppercase tracking-widest" style={{ color: SD.textMuted }}>Distribution by level</p>
                 </div>
               </div>
-              <DonutChart data={severityData} />
-              <div className="mt-8 space-y-3">
-                {severityData.map((item) => (
-                  <div key={item.name} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                      <span style={{ color: "rgba(255,255,255,0.6)" }}>{item.name}</span>
+              <div className="flex-1 flex flex-col justify-center pt-6">
+                <div className="flex items-center justify-center">
+                  <DonutChart data={severityData} />
+                </div>
+                <div className="mt-6 space-y-3">
+                  {severityData.map((item) => (
+                    <div key={item.name} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                        <span style={{ color: SD.textMuted }}>{item.name}</span>
+                      </div>
+                      <span className="font-tech">
+                        {incidents.length > 0 ? Math.round((item.value / incidents.length) * 100) : 0}%
+                      </span>
                     </div>
-                    <span className="font-tech">
-                      {incidents.length > 0 ? Math.round((item.value / incidents.length) * 100) : 0}%
-                    </span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </ShimmerCard>
           </motion.div>
@@ -467,7 +623,7 @@ export default function Analytics() {
             transition={{ duration: 0.8, delay: 0.7, ease: [0.16, 1, 0.3, 1] }}
             className="col-span-12 lg:col-span-4"
           >
-            <ShimmerCard delay={0.7} className="p-8">
+            <ShimmerCard delay={0.7} className="p-8 h-full">
               <div className="flex items-center gap-3 mb-6">
                 <Shield className="text-xl" style={{ color: COLORS.purple }} />
                 <div>
@@ -487,7 +643,7 @@ export default function Analytics() {
             transition={{ duration: 0.8, delay: 0.8, ease: [0.16, 1, 0.3, 1] }}
             className="col-span-12 lg:col-span-4"
           >
-            <ShimmerCard delay={0.8} className="p-8">
+            <ShimmerCard delay={0.8} className="p-8 h-full">
               <div className="flex items-center gap-3 mb-6">
                 <AlertTriangle className="text-xl" style={{ color: COLORS.amber }} />
                 <div>
@@ -497,33 +653,33 @@ export default function Analytics() {
               </div>
               <div className="relative h-32 w-32 mx-auto">
                 <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-                  <circle cx="50" cy="50" r="40" fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="16" />
+                  <circle cx="50" cy="50" r="40" fill="transparent" stroke={SD.glassBorder} strokeWidth="16" />
                   {actionData.length > 0 ? (
                     <>
                       <circle cx="50" cy="50" r="40" fill="transparent" stroke={COLORS.green} strokeWidth="16" strokeDasharray="251" strokeDashoffset="100" />
                       <circle cx="50" cy="50" r="40" fill="transparent" stroke={COLORS.red} strokeWidth="16" strokeDasharray="251" strokeDashoffset="220" strokeLinecap="butt" style={{ transform: "rotate(150deg)", transformOrigin: "50px 50px" }} />
                     </>
                   ) : (
-                    <circle cx="50" cy="50" r="40" fill="transparent" stroke="rgba(255,255,255,0.1)" strokeWidth="16" />
+                    <circle cx="50" cy="50" r="40" fill="transparent" stroke={SD.glassBorder} strokeWidth="16" />
                   )}
                 </svg>
               </div>
               <div className="mt-6 grid grid-cols-2 gap-4">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS.green }} />
-                  <span className="text-[10px] font-tech uppercase" style={{ color: "rgba(255,255,255,0.6)" }}>Monitor</span>
+                  <span className="text-[10px] font-tech uppercase" style={{ color: SD.textMuted }}>Monitor</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS.red }} />
-                  <span className="text-[10px] font-tech uppercase" style={{ color: "rgba(255,255,255,0.6)" }}>Block</span>
+                  <span className="text-[10px] font-tech uppercase" style={{ color: SD.textMuted }}>Block</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS.blue }} />
-                  <span className="text-[10px] font-tech uppercase" style={{ color: "rgba(255,255,255,0.6)" }}>Archive</span>
+                  <span className="text-[10px] font-tech uppercase" style={{ color: SD.textMuted }}>Archive</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS.purple }} />
-                  <span className="text-[10px] font-tech uppercase" style={{ color: "rgba(255,255,255,0.6)" }}>Escalate</span>
+                  <span className="text-[10px] font-tech uppercase" style={{ color: SD.textMuted }}>Escalate</span>
                 </div>
               </div>
             </ShimmerCard>
@@ -560,7 +716,7 @@ export default function Analytics() {
             Back to Monitor
           </Link>
           <p className="text-[9px] font-tech uppercase tracking-[0.5em]" style={{ color: "rgba(255,255,255,0.1)" }}>
-            Neural Dynamics // Analytics Engine v2.4
+            &copy; 2026 Log-Sentinel | Developed by TEAM 3.
           </p>
         </footer>
       </div>
