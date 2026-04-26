@@ -203,7 +203,7 @@ export function HowItWorksSection() {
                           </h2>
                           <p className="text-gray-400 text-lg leading-relaxed">{step.description}</p>
                           <a
-                            href="http://localhost:8080/"
+                            href="https://log-sentinel-cn-frontend.vercel.app/"
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-block mt-10 px-10 py-4 bg-emerald-500 text-black font-bold uppercase tracking-widest text-xs hover:bg-emerald-400 transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)]"

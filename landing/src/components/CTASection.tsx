@@ -14,7 +14,7 @@ export function CTASection() {
         </p>
 
         <a
-          href="http://localhost:8080/"
+          href="https://log-sentinel-cn-frontend.vercel.app/"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-block px-16 py-8 bg-white text-black rounded-full font-tech text-sm font-bold tracking-[0.3em] uppercase pulse-glow hover:bg-emerald-500 transition-colors duration-500 active:scale-95 group"
