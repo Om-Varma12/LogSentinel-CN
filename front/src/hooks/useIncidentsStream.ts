@@ -3,7 +3,7 @@ import { createIncidentsSocket } from "@/lib/api";
 import { transform } from "@/components/soc/transform";
 import type { ApiIncident, Incident, TerminalLine } from "@/components/soc/types";
 
-const MAX_INCIDENTS = 50;
+const MAX_INCIDENTS = 200;
 const MAX_TERMINAL_LINES = 80;
 const RECONNECT_DELAY_MS = 2000;
 

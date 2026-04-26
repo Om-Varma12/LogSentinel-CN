@@ -100,32 +100,36 @@ function DonutChart({
   const cx = 50;
   const cy = 50;
 
-  let accumulatedOffset = 0;
+  // Build segments: each has dashLen (arc length) and where it starts in the circle
+  const segments: { dashLen: number; dashOffset: number; color: string }[] = [];
+  let accumulated = 0;
+
+  data.forEach((entry) => {
+    const proportion = total > 0 ? entry.value / total : 0;
+    const dashLen = circumference * proportion;
+    const dashOffset = circumference - accumulated;
+    segments.push({ dashLen, dashOffset, color: entry.color });
+    accumulated += dashLen;
+  });
 
   return (
     <div className="relative aspect-square w-full max-w-[240px] mx-auto">
       <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
         <circle cx={cx} cy={cy} r={radius} fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth={strokeWidth} />
-        {data.map((entry, i) => {
-          const pct = total > 0 ? entry.value / total : 0;
-          const dashLen = circumference * (pct * 100) / 100;
-          const dashOffset = circumference - accumulatedOffset;
-          accumulatedOffset += dashLen;
-          return (
-            <circle
-              key={i}
-              cx={cx}
-              cy={cy}
-              r={radius}
-              fill="transparent"
-              stroke={entry.color}
-              strokeWidth={strokeWidth}
-              strokeDasharray={`${dashLen} ${circumference - dashLen}`}
-              strokeDashoffset={dashOffset}
-              strokeLinecap="butt"
-            />
-          );
-        })}
+        {segments.map((seg, i) => (
+          <circle
+            key={i}
+            cx={cx}
+            cy={cy}
+            r={radius}
+            fill="transparent"
+            stroke={seg.color}
+            strokeWidth={strokeWidth}
+            strokeDasharray={`${seg.dashLen} ${circumference - seg.dashLen}`}
+            strokeDashoffset={seg.dashOffset}
+            strokeLinecap="butt"
+          />
+        ))}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="font-serif text-3xl tabular-nums">{total >= 1000 ? `${(total / 1000).toFixed(1)}k` : total}</span>
@@ -153,33 +157,59 @@ function TimelineChart({ data }: { data: { time: string; high: number; medium: n
     ? `M ${points.map((p) => `${p.x},${p.y}`).join(" T ") || `M ${padding},${height - padding}`}`
     : `M ${padding},${height - padding}`;
 
+  // Y-axis tick positions and labels
+  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((pct) => ({
+    y: padding + (height - padding * 2) * pct,
+    label: Math.round(maxVal * (1 - pct)),
+  }));
+
+  // X-axis: show every Nth label so they don't crowd
+  const labelStep = Math.max(1, Math.floor(data.length / 6));
+  const xLabels = data.filter((_, i) => i % labelStep === 0 || i === data.length - 1);
+
   return (
-    <div className="h-[240px] w-full relative">
-      <svg className="w-full h-full" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="gradEmerald" x1="0%" y1="0%" x2="0%" y2="100%">
-            <stop offset="0%" style={{ stopColor: SD.emerald, stopOpacity: 0.2 }} />
-            <stop offset="100%" style={{ stopColor: SD.emerald, stopOpacity: 0 }} />
-          </linearGradient>
-        </defs>
-        <path d={`${pathD} L ${width - padding},${height - padding} L ${padding},${height - padding} Z`} fill="url(#gradEmerald)" />
-        <path d={pathD} fill="none" stroke={SD.emerald} strokeWidth="2" />
-        {[0.25, 0.5, 0.75].map((pct, i) => (
-          <line
-            key={i}
-            x1={padding}
-            y1={padding + (height - padding * 2) * pct}
-            x2={width - padding}
-            y2={padding + (height - padding * 2) * pct}
-            stroke="rgba(255,255,255,0.06)"
-            strokeDasharray="4"
-          />
+    <div className="h-[240px] w-full relative flex">
+      {/* Y-axis labels */}
+      <div className="flex flex-col justify-between pr-3 pb-6" style={{ height: height - padding * 2 }}>
+        {yTicks.map((tick, i) => (
+          <span key={i} className="text-[9px] font-tech text-right leading-none" style={{ color: SD.textDimmest }}>
+            {tick.label}
+          </span>
         ))}
-      </svg>
-      <div className="flex justify-between mt-4 px-2">
-        {data.length > 0 && data.map((d, i) => (
-          <span key={i} className="text-[9px] font-tech uppercase" style={{ color: SD.textDimmest }}>{d.time}</span>
-        ))}
+      </div>
+
+      <div className="flex-1">
+        <svg className="w-full h-full" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="gradEmerald" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" style={{ stopColor: SD.emerald, stopOpacity: 0.2 }} />
+              <stop offset="100%" style={{ stopColor: SD.emerald, stopOpacity: 0 }} />
+            </linearGradient>
+          </defs>
+          <path d={`${pathD} L ${width - padding},${height - padding} L ${padding},${height - padding} Z`} fill="url(#gradEmerald)" />
+          <path d={pathD} fill="none" stroke={SD.emerald} strokeWidth="2" />
+          {yTicks.map((tick, i) => (
+            <line
+              key={i}
+              x1={padding}
+              y1={tick.y}
+              x2={width - padding}
+              y2={tick.y}
+              stroke="rgba(255,255,255,0.06)"
+              strokeDasharray="4"
+            />
+          ))}
+        </svg>
+        <div className="flex justify-between mt-2 px-1">
+          {xLabels.map((d, globalIdx) => {
+            const originalIdx = data.findIndex((x) => x === d);
+            return (
+              <span key={globalIdx} className="text-[9px] font-tech uppercase" style={{ color: SD.textDimmest }}>
+                {d.time}
+              </span>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -287,15 +317,27 @@ export default function Analytics() {
   }, [incidents]);
 
   const timeSeriesData = useMemo(() => {
-    const buckets: Record<string, { high: number; medium: number; low: number }> = {};
-    incidents.slice(0, 20).forEach((inc) => {
-      const timeKey = inc.ts.slice(0, 8) || "Recent";
-      if (!buckets[timeKey]) buckets[timeKey] = { high: 0, medium: 0, low: 0 };
-      buckets[timeKey][inc.level.toLowerCase() as "high" | "medium" | "low"]++;
+    if (incidents.length === 0) return [];
+    // Bucket into 5-minute intervals
+    const intervalMs = 5 * 60 * 1000;
+    const startTime = Date.now() - (incidents.length - 1) * 5 * 1000;
+    const firstBucketTime = Math.floor(startTime / intervalMs) * intervalMs;
+
+    const buckets: Record<number, { high: number; medium: number; low: number }> = {};
+    incidents.forEach((inc, idx) => {
+      const incidentTime = startTime + idx * 5 * 1000;
+      const bucketKey = Math.round((incidentTime - firstBucketTime) / intervalMs);
+      if (!buckets[bucketKey]) buckets[bucketKey] = { high: 0, medium: 0, low: 0 };
+      buckets[bucketKey][inc.level.toLowerCase() as "high" | "medium" | "low"]++;
     });
+
     return Object.entries(buckets)
-      .reverse()
-      .map(([time, counts]) => ({ time, ...counts }));
+      .sort(([a], [b]) => Number(a) - Number(b))
+      .map(([bucketIdx, counts]) => {
+        const ms = firstBucketTime + Number(bucketIdx) * intervalMs;
+        const ts = new Date(ms).toISOString().slice(11, 19);
+        return { time: ts, ...counts };
+      });
   }, [incidents]);
 
   const totalIncidents = incidents.length;
