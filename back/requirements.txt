@@ -9,5 +9,5 @@ langchain
 langchain-groq
 dotenv
 fastapi
-uvicorn[standard]
+uvicorn
 requests
