@@ -247,23 +247,104 @@ function EndpointBars({ data }: { data: { name: string; value: number; risk?: "l
   const maxVal = Math.max(...data.map((d) => d.value), 1);
   const riskColor = (risk?: "low" | "medium" | "high") =>
     risk === "high" ? COLORS.red : risk === "medium" ? COLORS.amber : COLORS.green;
+
+  if (data.length === 0) {
+    return (
+      <div className="h-[200px] w-full flex items-center justify-center rounded-xl" style={{ border: `1px solid ${SD.glassBorder}`, background: SD.glassBg }}>
+        <span className="text-[10px] font-tech uppercase tracking-wider" style={{ color: SD.textDimmest }}>
+          Waiting for endpoint traffic...
+        </span>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-end gap-6 h-[200px] px-4 overflow-x-auto">
+    <div className="h-[220px] w-full">
+      <div className="h-[188px] flex items-end gap-3 px-2 overflow-x-auto">
       {data.slice(0, 8).map((item, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-3">
-          <div className="w-full rounded-t-lg relative group h-full flex flex-col justify-end">
+        <div key={i} className="min-w-[88px] flex-1 h-full flex flex-col justify-end gap-2">
+          <div
+            className="h-full rounded-lg border p-1 flex items-end"
+            style={{ borderColor: SD.glassBorder, background: SD.glassBg }}
+          >
             <div
-              className="absolute inset-x-0 bottom-0 rounded-t-lg transition-all duration-1000"
-              style={{ height: `${maxVal > 0 ? (item.value / maxVal) * 100 : 0}%`, background: riskColor(item.risk) }}
+              className="w-full rounded-md transition-all duration-1000"
+              style={{
+                height: `${maxVal > 0 ? (item.value / maxVal) * 100 : 0}%`,
+                minHeight: item.value > 0 ? "8px" : "0px",
+                background: riskColor(item.risk),
+              }}
             />
           </div>
-          <span className="text-[9px] font-tech uppercase truncate w-full text-center" style={{ color: SD.textDimmest }}>
+          <span className="text-[9px] font-tech tabular-nums text-center" style={{ color: SD.textMuted }}>
+            {item.value}
+          </span>
+          <span
+            className="text-[9px] font-tech uppercase truncate w-full text-center"
+            style={{ color: SD.textDimmest }}
+            title={item.name}
+          >
             {item.name}
           </span>
         </div>
       ))}
+      </div>
     </div>
   );
+}
+
+function normalizeEndpoint(rawEndpoint: string): string {
+  const trimmed = (rawEndpoint || "").trim();
+  if (!trimmed) return "/";
+
+  // Handle absolute URLs, plain paths, and any query/hash suffixes.
+  let path = trimmed;
+  if (!trimmed.startsWith("/")) {
+    try {
+      path = new URL(trimmed).pathname || "/";
+    } catch {
+      path = `/${trimmed}`;
+    }
+  }
+
+  path = path.split("?")[0]?.split("#")[0] || "/";
+  path = path.replace(/\/{2,}/g, "/");
+  if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+  return path || "/";
+}
+
+function endpointRisk(endpoint: string): "low" | "medium" | "high" {
+  const lowRisk = new Set([
+    "/api/v1/health",
+    "/api/v1/metrics",
+    "/api/v1/users",
+    "/api/v1/dashboard",
+    "/api/v2/stream",
+    "/webhook",
+  ]);
+
+  const mediumRisk = new Set([
+    "/login",
+    "/api/v1/auth/login",
+    "/api/v1/auth/logout",
+    "/register",
+    "/api/v1/logs",
+    "/api/v1/alerts",
+  ]);
+
+  if (
+    endpoint.includes("/admin") ||
+    endpoint.includes("/config") ||
+    endpoint === "/usr" ||
+    endpoint === "/bin" ||
+    endpoint === "/api/v1/settings" ||
+    endpoint === "/api/v1/profile"
+  ) {
+    return "high";
+  }
+  if (mediumRisk.has(endpoint)) return "medium";
+  if (lowRisk.has(endpoint)) return "low";
+  return "medium";
 }
 
 export default function Analytics() {
@@ -290,68 +371,17 @@ export default function Analytics() {
       .sort((a, b) => b.value - a.value);
   }, [incidents]);
 
-  // Predefined endpoint categories
-  const PREDEF_ENDPOINTS = [
-    // Low-risk (health/metrics/info)
-    { name: "/api/v1/health", risk: "low" as const },
-    { name: "/api/v1/metrics", risk: "low" as const },
-    { name: "/api/v1/users", risk: "low" as const },
-    { name: "/api/v1/dashboard", risk: "low" as const },
-    { name: "/api/v2/stream", risk: "low" as const },
-    { name: "/webhook", risk: "low" as const },
-    // Medium-risk (login/auth — brute-force targets)
-    { name: "/login", risk: "medium" as const },
-    { name: "/api/v1/auth/login", risk: "medium" as const },
-    { name: "/api/v1/auth/logout", risk: "medium" as const },
-    { name: "/register", risk: "medium" as const },
-    // High-risk (admin/config — sqlmap/scanner targets)
-    { name: "/admin", risk: "high" as const },
-    { name: "/admin/panel", risk: "high" as const },
-    { name: "/admin/users", risk: "high" as const },
-    { name: "/api/v1/settings", risk: "high" as const },
-    { name: "/api/v1/profile", risk: "high" as const },
-    { name: "/config", risk: "high" as const },
-    { name: "/etc/config", risk: "high" as const },
-    // Path traversal / enumeration targets
-    { name: "/usr", risk: "high" as const },
-    { name: "/bin", risk: "high" as const },
-    { name: "/api/v1/logs", risk: "medium" as const },
-    { name: "/api/v1/alerts", risk: "medium" as const },
-    // Destructive methods
-    { name: "_DELETE_", risk: "high" as const },
-    { name: "_PUT_", risk: "high" as const },
-  ];
-
   const endpointData = useMemo(() => {
     const counts: Record<string, number> = {};
-    PREDEF_ENDPOINTS.forEach(({ name }) => { counts[name] = 0; });
 
     incidents.forEach((inc) => {
-      const method = inc.parsed["Request Method"];
-      const ep = inc.endpoint;
-
-      // Check for DELETE/PUT first
-      if (method === "DELETE") {
-        counts["_DELETE_"] = (counts["_DELETE_"] || 0) + 1;
-      } else if (method === "PUT") {
-        counts["_PUT_"] = (counts["_PUT_"] || 0) + 1;
-      } else {
-        // Match predefined endpoints
-        const matched = PREDEF_ENDPOINTS.find(({ name }) =>
-          name !== "_DELETE_" && name !== "_PUT_" && ep.includes(name)
-        );
-        if (matched) {
-          counts[matched.name] = (counts[matched.name] || 0) + 1;
-        } else {
-          // Fallback: use first path segment
-          const seg = "/" + ep.split("/")[1];
-          counts[seg] = (counts[seg] || 0) + 1;
-        }
-      }
+      const requestPath = inc.parsed.Request?.split(" ")[0] || inc.endpoint;
+      const endpoint = normalizeEndpoint(requestPath);
+      counts[endpoint] = (counts[endpoint] || 0) + 1;
     });
 
-    return PREDEF_ENDPOINTS
-      .map(({ name, risk }) => ({ name, value: counts[name] || 0, risk }))
+    return Object.entries(counts)
+      .map(([name, value]) => ({ name, value, risk: endpointRisk(name) }))
       .filter((d) => d.value > 0)
       .sort((a, b) => b.value - a.value)
       .slice(0, 8);
@@ -499,7 +529,7 @@ export default function Analytics() {
             transition={{ duration: 0.8, delay: 0.5, ease: [0.16, 1, 0.3, 1] }}
             className="col-span-12 lg:col-span-4 lg:row-span-2"
           >
-            <ShimmerCard delay={0.5} className="p-8 h-full">
+            <ShimmerCard delay={0.5} className="p-8 h-full flex flex-col">
               <div className="flex items-center gap-3 mb-8">
                 <PieChartIcon className="text-xl" style={{ color: COLORS.blue }} />
                 <div>
@@ -507,19 +537,23 @@ export default function Analytics() {
                   <p className="text-[10px] font-tech uppercase tracking-widest" style={{ color: SD.textMuted }}>Distribution by level</p>
                 </div>
               </div>
-              <DonutChart data={severityData} />
-              <div className="mt-8 space-y-3">
-                {severityData.map((item) => (
-                  <div key={item.name} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                      <span style={{ color: SD.textMuted }}>{item.name}</span>
+              <div className="flex-1 flex flex-col justify-center pt-6">
+                <div className="flex items-center justify-center">
+                  <DonutChart data={severityData} />
+                </div>
+                <div className="mt-6 space-y-3">
+                  {severityData.map((item) => (
+                    <div key={item.name} className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                        <span style={{ color: SD.textMuted }}>{item.name}</span>
+                      </div>
+                      <span className="font-tech">
+                        {incidents.length > 0 ? Math.round((item.value / incidents.length) * 100) : 0}%
+                      </span>
                     </div>
-                    <span className="font-tech">
-                      {incidents.length > 0 ? Math.round((item.value / incidents.length) * 100) : 0}%
-                    </span>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </ShimmerCard>
           </motion.div>
@@ -552,7 +586,7 @@ export default function Analytics() {
             transition={{ duration: 0.8, delay: 0.7, ease: [0.16, 1, 0.3, 1] }}
             className="col-span-12 lg:col-span-4"
           >
-            <ShimmerCard delay={0.7} className="p-8">
+            <ShimmerCard delay={0.7} className="p-8 h-full">
               <div className="flex items-center gap-3 mb-6">
                 <Shield className="text-xl" style={{ color: COLORS.purple }} />
                 <div>
@@ -572,7 +606,7 @@ export default function Analytics() {
             transition={{ duration: 0.8, delay: 0.8, ease: [0.16, 1, 0.3, 1] }}
             className="col-span-12 lg:col-span-4"
           >
-            <ShimmerCard delay={0.8} className="p-8">
+            <ShimmerCard delay={0.8} className="p-8 h-full">
               <div className="flex items-center gap-3 mb-6">
                 <AlertTriangle className="text-xl" style={{ color: COLORS.amber }} />
                 <div>
