@@ -95,6 +95,8 @@
   .font-display { font-family: 'Inter', sans-serif; font-weight: 700; letter-spacing: -0.02em; }
   .font-mono-soc { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
   .font-body { font-family: 'Inter', sans-serif; }
+  .font-serif { font-family: 'Newsreader', Georgia, serif; font-optical-sizing: auto; }
+  .font-tech { font-family: 'Space Grotesk', 'Inter', sans-serif; }
 }
 
 /* Animation keyframes */
