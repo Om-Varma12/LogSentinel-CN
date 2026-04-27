@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Icon } from '@iconify/react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import '../styles/design-system.css';
 
 const sections = {
@@ -29,8 +29,53 @@ type SidebarProps = {
   activeItem?: string;
 };
 
+const itemTargets: Record<string, string> = {
+  welcome: '/introduction#welcome',
+  architecture: '/introduction#architecture',
+  workflow: '/introduction#workflow',
+  installation: '/getting-started#installation',
+  configuration: '/getting-started#configuration',
+  api: '/getting-started#api',
+  features: '/deep-dive#features',
+  mitre: '/deep-dive#mitre',
+  deployment: '/deep-dive#deployment',
+  troubleshooting: '/deep-dive#troubleshooting',
+  security: '/deep-dive#security',
+};
+
+const pageSectionIds = ['features', 'mitre', 'deployment', 'troubleshooting', 'security'];
+
 export function DocumentationSidebar({ activeItem = 'welcome' }: SidebarProps) {
   const [active, setActive] = useState(activeItem);
+  const location = useLocation();
+
+  useEffect(() => {
+    const hashValue = location.hash.replace('#', '');
+    const initialActive = pageSectionIds.includes(hashValue) ? hashValue : 'features';
+    setActive(initialActive);
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+
+        if (visible?.target instanceof HTMLElement) {
+          setActive(visible.target.id);
+        }
+      },
+      { threshold: 0.4, rootMargin: '-18% 0px -55% 0px' }
+    );
+
+    pageSectionIds.forEach((id) => {
+      const element = document.getElementById(id);
+      if (element) {
+        observer.observe(element);
+      }
+    });
+
+    return () => observer.disconnect();
+  }, [activeItem, location.pathname, location.hash]);
 
   return (
     <aside className="fixed top-0 left-0 w-80 h-screen bg-white/[0.02] backdrop-blur-xl border-r border-white/5 z-50 flex flex-col">
@@ -54,7 +99,7 @@ export function DocumentationSidebar({ activeItem = 'welcome' }: SidebarProps) {
                 {items.map((item) => (
                   <li key={item.id}>
                     <Link
-                      to={item.id === 'welcome' ? '/introduction' : item.id === 'installation' ? '/getting-started' : `/deep-dive#${item.id}`}
+                      to={itemTargets[item.id]}
                       onClick={() => setActive(item.id)}
                       className={`block px-3 py-2 rounded-lg transition-colors text-sm ${
                         active === item.id
@@ -285,6 +330,79 @@ export function TroubleshootingPage() {
             </p>
           </header>
 
+          {/* Core Features */}
+          <section id="features" className="mb-32 reveal" style={{ animationDelay: '150ms' }}>
+            <div className="flex items-center gap-6 mb-12">
+              <h2 className="font-serif text-3xl tracking-tight italic">Core Features</h2>
+              <div className="h-px flex-grow bg-white/5"></div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="glass rounded-3xl p-8 spotlight-card">
+                <h3 className="font-serif text-2xl mb-3">Real-Time Detection</h3>
+                <p className="text-white/40 leading-relaxed">Continuous ingestion and triage keeps the operational queue focused on what matters most.</p>
+              </div>
+              <div className="glass rounded-3xl p-8 spotlight-card">
+                <h3 className="font-serif text-2xl mb-3">Plain-Language Explanations</h3>
+                <p className="text-white/40 leading-relaxed">Every alert is translated into a readable narrative that explains the risk and the next action.</p>
+              </div>
+              <div className="glass rounded-3xl p-8 spotlight-card">
+                <h3 className="font-serif text-2xl mb-3">Response Logic</h3>
+                <p className="text-white/40 leading-relaxed">Validated playbooks are attached to each detection so teams can move immediately.</p>
+              </div>
+              <div className="glass rounded-3xl p-8 spotlight-card">
+                <h3 className="font-serif text-2xl mb-3">Audit-Ready Telemetry</h3>
+                <p className="text-white/40 leading-relaxed">Immutable logs preserve the incident trail for compliance and postmortems.</p>
+              </div>
+            </div>
+          </section>
+
+          {/* MITRE Mapping */}
+          <section id="mitre" className="mb-32 reveal" style={{ animationDelay: '200ms' }}>
+            <div className="flex items-center gap-6 mb-12">
+              <h2 className="font-serif text-3xl tracking-tight italic">MITRE Mapping</h2>
+              <div className="h-px flex-grow bg-white/5"></div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="code-block rounded-2xl p-6">
+                <p className="font-tech text-[9px] uppercase text-white/20 mb-3">Initial Access</p>
+                <code className="font-tech text-sm text-emerald-400">T1190 - Exploit Public-Facing Application</code>
+              </div>
+              <div className="code-block rounded-2xl p-6">
+                <p className="font-tech text-[9px] uppercase text-white/20 mb-3">Execution</p>
+                <code className="font-tech text-sm text-emerald-400">T1059 - Command and Scripting Interpreter</code>
+              </div>
+              <div className="code-block rounded-2xl p-6">
+                <p className="font-tech text-[9px] uppercase text-white/20 mb-3">Persistence</p>
+                <code className="font-tech text-sm text-emerald-400">T1547 - Boot or Logon Autostart Execution</code>
+              </div>
+            </div>
+          </section>
+
+          {/* Deployment */}
+          <section id="deployment" className="mb-32 reveal" style={{ animationDelay: '250ms' }}>
+            <div className="flex items-center gap-6 mb-12">
+              <h2 className="font-serif text-3xl tracking-tight italic">Deployment Options</h2>
+              <div className="h-px flex-grow bg-white/5"></div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="glass spotlight-card rounded-3xl p-8 border-white/5">
+                <Icon icon="mdi:docker" className="text-4xl text-white/20 mb-6" />
+                <h4 className="font-tech text-[11px] uppercase tracking-widest text-emerald-500 mb-2">Docker</h4>
+                <p className="text-white/40 text-sm font-light leading-relaxed">Containerized agent for ephemeral workloads and microservices.</p>
+              </div>
+              <div className="glass spotlight-card rounded-3xl p-8 border-white/5">
+                <Icon icon="mdi:kubernetes" className="text-4xl text-white/20 mb-6" />
+                <h4 className="font-tech text-[11px] uppercase tracking-widest text-emerald-500 mb-2">Kubernetes</h4>
+                <p className="text-white/40 text-sm font-light leading-relaxed">Helm-native rollout for cluster-wide observability and monitoring.</p>
+              </div>
+              <div className="glass spotlight-card rounded-3xl p-8 border-white/5">
+                <Icon icon="mdi:server-network" className="text-4xl text-white/20 mb-6" />
+                <h4 className="font-tech text-[11px] uppercase tracking-widest text-emerald-500 mb-2">Bare Metal</h4>
+                <p className="text-white/40 text-sm font-light leading-relaxed">Direct kernel-level integration for maximum throughput performance.</p>
+              </div>
+            </div>
+          </section>
+
           {/* Search */}
           <section className="mb-20 reveal" style={{ animationDelay: '200ms' }}>
             <div className="relative group">
@@ -303,7 +421,7 @@ export function TroubleshootingPage() {
           </section>
 
           {/* FAQ Accordion */}
-          <section className="mb-32 reveal" style={{ animationDelay: '300ms' }}>
+          <section id="troubleshooting" className="mb-32 reveal" style={{ animationDelay: '300ms' }}>
             <div className="flex items-center gap-6 mb-12">
               <h2 className="font-serif text-3xl tracking-tight italic">Frequently Asked</h2>
               <div className="h-px flex-grow bg-white/5"></div>
@@ -401,7 +519,7 @@ export function TroubleshootingPage() {
           </section>
 
           {/* Contact Grid */}
-          <section className="mb-32 reveal">
+          <section id="security" className="mb-32 reveal">
             <div className="flex items-center gap-6 mb-12">
               <h2 className="font-serif text-3xl tracking-tight italic">Still Stuck?</h2>
               <div className="h-px flex-grow bg-white/5"></div>
@@ -428,18 +546,18 @@ export function TroubleshootingPage() {
                 title="Full Docs"
                 description="Browse the complete API reference and architecture guides."
                 badge="Self-Service"
-                href="/introduction"
+                href="/introduction#welcome"
               />
             </div>
           </section>
 
           {/* Navigation Footer */}
           <footer className="pt-12 border-t border-white/5 flex items-center justify-between reveal">
-            <Link to="/getting-started" className="group flex flex-col items-start">
+            <Link to="/getting-started#installation" className="group flex flex-col items-start">
               <span className="text-[9px] font-tech uppercase tracking-[0.4em] text-white/20 mb-2">Previous</span>
               <span className="font-serif text-xl italic text-white/50 group-hover:text-emerald-400 transition-colors">← Getting Started</span>
             </Link>
-            <Link to="/" className="group flex flex-col items-end">
+            <Link to="/#features" className="group flex flex-col items-end">
               <span className="text-[9px] font-tech uppercase tracking-[0.4em] text-white/20 mb-2">Next</span>
               <span className="font-serif text-xl italic text-white/50 group-hover:text-emerald-400 transition-colors">Home →</span>
             </Link>

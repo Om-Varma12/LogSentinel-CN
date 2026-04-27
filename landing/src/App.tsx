@@ -37,6 +37,21 @@ function App() {
     return () => revealObserver.disconnect();
   }, []);
 
+  useEffect(() => {
+    const hash = location.hash.replace('#', '');
+
+    if (!hash) {
+      window.scrollTo({ top: 0, behavior: 'auto' });
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.pathname, location.hash]);
+
   return (
     <div className="min-h-screen relative">
       <Atmosphere />
