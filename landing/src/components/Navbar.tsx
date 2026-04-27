@@ -24,7 +24,6 @@ export function Navbar() {
         <div className="hidden lg:flex items-center gap-10">
           <a href="#features" id="nav-features" className="nav-link font-tech text-[10px] tracking-[0.2em] uppercase">Features</a>
           <a href="#use-cases" id="nav-cases" className="nav-link font-tech text-[10px] tracking-[0.2em] uppercase">Use Cases</a>
-          <a href="#pricing" id="nav-pricing" className="nav-link font-tech text-[10px] tracking-[0.2em] uppercase">Pricing</a>
           <a href="#docs" id="nav-docs" className="nav-link font-tech text-[10px] tracking-[0.2em] uppercase text-white/40">Documentation</a>
         </div>
 
