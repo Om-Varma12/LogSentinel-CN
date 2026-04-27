@@ -10,12 +10,12 @@ import { CTASection } from './components/CTASection';
 import { Footer } from './components/Footer';
 import { Atmosphere } from './components/Atmosphere';
 import { SmoothScroll } from './components/SmoothScroll';
-import { DocumentationPage } from './pages/DocumentationPage';
+import { IntroductionPage, GettingStartedPage } from './pages/DocumentationPage';
 import './styles/design-system.css';
 
 function App() {
   const location = useLocation();
-  const isDocsPage = location.pathname === '/docs';
+  const isDocPage = location.pathname.startsWith('/introduction') || location.pathname.startsWith('/getting-started');
 
   useEffect(() => {
     const revealObserver = new IntersectionObserver(
@@ -39,16 +39,10 @@ function App() {
   return (
     <div className="min-h-screen relative">
       <Atmosphere />
-      {!isDocsPage && <Navbar />}
+      {!isDocPage && <Navbar />}
       <Routes>
-        <Route
-          path="/docs"
-          element={
-            <main>
-              <DocumentationPage />
-            </main>
-          }
-        />
+        <Route path="/introduction" element={<IntroductionPage />} />
+        <Route path="/getting-started" element={<GettingStartedPage />} />
         <Route
           path="/"
           element={
