@@ -57,13 +57,19 @@ export function DocumentationSidebar({ activeItem = 'welcome' }: SidebarProps) {
     const ids = pageSectionIds[location.pathname] ?? [];
 
     if (!ids.length) {
-      setActive(location.hash.replace('#', '') || activeItem);
-      return;
+      const frame = window.requestAnimationFrame(() => {
+        setActive(location.hash.replace('#', '') || activeItem);
+      });
+
+      return () => window.cancelAnimationFrame(frame);
     }
 
     const hashValue = location.hash.replace('#', '');
     const initialActive = ids.includes(hashValue) ? hashValue : ids[0];
-    setActive(initialActive || activeItem);
+
+    const frame = window.requestAnimationFrame(() => {
+      setActive(initialActive || activeItem);
+    });
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -75,7 +81,7 @@ export function DocumentationSidebar({ activeItem = 'welcome' }: SidebarProps) {
           setActive(visible.target.id);
         }
       },
-      { threshold: 0.4, rootMargin: '-18% 0px -55% 0px' }
+      { threshold: 0.1, rootMargin: '-12% 0px -60% 0px' }
     );
 
     ids.forEach((id) => {
@@ -85,7 +91,10 @@ export function DocumentationSidebar({ activeItem = 'welcome' }: SidebarProps) {
       }
     });
 
-    return () => observer.disconnect();
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
   }, [activeItem, location.pathname, location.hash]);
 
   return (

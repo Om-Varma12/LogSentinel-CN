@@ -29,7 +29,7 @@ export function Navbar() {
           setActiveSection(visibleEntry.target.id as 'features' | 'use-cases');
         }
       },
-      { threshold: 0.5, rootMargin: '-20% 0px -55% 0px' }
+      { threshold: 0.1, rootMargin: '-12% 0px -60% 0px' }
     );
 
     sectionIds.forEach((id) => {
