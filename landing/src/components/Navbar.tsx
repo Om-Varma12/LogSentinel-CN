@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -19,12 +20,12 @@ export function Navbar() {
       }`}
     >
       <div className="max-w-7xl w-full mx-auto px-10 flex justify-between items-center">
-        <a href="#" id="brand-logo" className="font-serif text-2xl tracking-tighter">Log-Sentinel.</a>
+        <Link to="/" id="brand-logo" className="font-serif text-2xl tracking-tighter">Log-Sentinel.</Link>
 
         <div className="hidden lg:flex items-center gap-10">
-          <a href="#features" id="nav-features" className="nav-link font-tech text-[10px] tracking-[0.2em] uppercase">Features</a>
-          <a href="#use-cases" id="nav-cases" className="nav-link font-tech text-[10px] tracking-[0.2em] uppercase">Use Cases</a>
-          <a href="#docs" id="nav-docs" className="nav-link font-tech text-[10px] tracking-[0.2em] uppercase text-white/40">Documentation</a>
+          <a href="/#features" id="nav-features" className="nav-link font-tech text-[10px] tracking-[0.2em] uppercase">Features</a>
+          <a href="/#use-cases" id="nav-cases" className="nav-link font-tech text-[10px] tracking-[0.2em] uppercase">Use Cases</a>
+          <Link to="/docs" id="nav-docs" className="nav-link font-tech text-[10px] tracking-[0.2em] uppercase">Documentation</Link>
         </div>
 
         <a href="https://log-sentinel-cn-frontend.vercel.app/" target="_blank" rel="noopener noreferrer" id="nav-cta" className="px-8 py-3 bg-emerald-500 text-black rounded-full font-tech text-[10px] font-bold tracking-[0.15em] uppercase pulse-glow transition-transform hover:scale-105 active:scale-95">Start Free Trial</a>
