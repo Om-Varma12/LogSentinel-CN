@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { Icon } from '@iconify/react';
+import workflowImage from '../assets/workflow.png';
 import '../styles/design-system.css';
 
 const sections = {
@@ -28,8 +30,72 @@ type SidebarProps = {
   activeItem?: string;
 };
 
+const itemTargets: Record<string, string> = {
+  welcome: '/introduction#welcome',
+  architecture: '/introduction#architecture',
+  workflow: '/introduction#workflow',
+  installation: '/getting-started#installation',
+  configuration: '/getting-started#configuration',
+  api: '/getting-started#api',
+  features: '/deep-dive#features',
+  mitre: '/deep-dive#mitre',
+  deployment: '/deep-dive#deployment',
+  troubleshooting: '/deep-dive#troubleshooting',
+  security: '/deep-dive#security',
+};
+
+const pageSectionIds: Record<string, string[]> = {
+  '/introduction': ['welcome', 'architecture', 'workflow'],
+  '/getting-started': ['installation', 'configuration', 'api'],
+};
+
 export function DocumentationSidebar({ activeItem = 'welcome' }: SidebarProps) {
   const [active, setActive] = useState(activeItem);
+  const location = useLocation();
+
+  useEffect(() => {
+    const ids = pageSectionIds[location.pathname] ?? [];
+
+    if (!ids.length) {
+      const frame = window.requestAnimationFrame(() => {
+        setActive(location.hash.replace('#', '') || activeItem);
+      });
+
+      return () => window.cancelAnimationFrame(frame);
+    }
+
+    const hashValue = location.hash.replace('#', '');
+    const initialActive = ids.includes(hashValue) ? hashValue : ids[0];
+
+    const frame = window.requestAnimationFrame(() => {
+      setActive(initialActive || activeItem);
+    });
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+
+        if (visible?.target instanceof HTMLElement) {
+          setActive(visible.target.id);
+        }
+      },
+      { threshold: 0.1, rootMargin: '-12% 0px -60% 0px' }
+    );
+
+    ids.forEach((id) => {
+      const element = document.getElementById(id);
+      if (element) {
+        observer.observe(element);
+      }
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [activeItem, location.pathname, location.hash]);
 
   return (
     <aside className="fixed top-0 left-0 w-80 h-screen bg-white/[0.02] backdrop-blur-xl border-r border-white/5 z-50 flex flex-col">
@@ -52,13 +118,9 @@ export function DocumentationSidebar({ activeItem = 'welcome' }: SidebarProps) {
               <ul className="space-y-1">
                 {items.map((item) => (
                   <li key={item.id}>
-                    <a
-                      href={`#${item.id}`}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setActive(item.id);
-                        document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth' });
-                      }}
+                    <Link
+                      to={itemTargets[item.id]}
+                      onClick={() => setActive(item.id)}
                       className={`block px-3 py-2 rounded-lg transition-colors text-sm ${
                         active === item.id
                           ? 'bg-emerald-500/10 text-emerald-400 font-medium'
@@ -66,7 +128,7 @@ export function DocumentationSidebar({ activeItem = 'welcome' }: SidebarProps) {
                       }`}
                     >
                       {item.label}
-                    </a>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -272,14 +334,18 @@ export function IntroductionPage() {
               </div>
             </div>
           </div>
-          <div className="glass rounded-[2rem] p-8 border-emerald-500/10 flex items-center justify-center">
-            <Icon icon="lucide:workflow" className="text-[120px] text-emerald-500/10" />
+          <div className="glass rounded-[3rem] p-6 border-emerald-500/10 flex items-center justify-center overflow-hidden min-h-[420px] md:min-h-[560px]">
+            <img
+              src={workflowImage}
+              alt="Workflow protocol diagram"
+              className="w-full h-full object-contain rounded-[2rem]"
+            />
           </div>
         </div>
       </section>
 
       {/* Footer CTA */}
-      <a href="/getting-started" className="block reveal group">
+      <Link to="/getting-started#installation" className="block reveal group">
         <div className="glass rounded-[2rem] p-12 shimmer-border spotlight-card flex flex-col md:flex-row items-center justify-between gap-8 transition-transform duration-500 group-hover:scale-[1.01] group-hover:bg-white/[0.04]">
           <div className="space-y-4">
             <p className="font-tech text-[10px] tracking-[0.4em] uppercase text-emerald-500">Next Step</p>
@@ -290,7 +356,7 @@ export function IntroductionPage() {
             <Icon icon="lucide:arrow-right" className="text-3xl" />
           </div>
         </div>
-      </a>
+      </Link>
     </DocContent>
   );
 }
@@ -380,6 +446,31 @@ export function GettingStartedPage() {
         </div>
       </section>
 
+        {/* Section: API Reference */}
+        <section id="api" className="mb-32 reveal">
+          <div className="flex items-center gap-6 mb-12">
+            <h2 className="font-serif text-4xl tracking-tight">4. API Reference</h2>
+            <div className="h-px flex-grow bg-white/5"></div>
+          </div>
+          <p className="text-white/50 mb-8 leading-relaxed">
+            Use the API to stream logs, fetch threat summaries, and submit response actions from your own automation layer.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="code-block rounded-2xl p-6">
+              <p className="font-tech text-[9px] uppercase text-white/20 mb-3">GET /api/v1/incidents</p>
+              <code className="font-tech text-sm text-emerald-400">List recent detections</code>
+            </div>
+            <div className="code-block rounded-2xl p-6">
+              <p className="font-tech text-[9px] uppercase text-white/20 mb-3">GET /api/v1/incidents/:id</p>
+              <code className="font-tech text-sm text-emerald-400">Retrieve explanation and context</code>
+            </div>
+            <div className="code-block rounded-2xl p-6">
+              <p className="font-tech text-[9px] uppercase text-white/20 mb-3">POST /api/v1/respond</p>
+              <code className="font-tech text-sm text-emerald-400">Trigger playbook execution</code>
+            </div>
+          </div>
+        </section>
+
       {/* Section: Deployment Options */}
       <section id="deployment" className="mb-32 reveal">
         <div className="flex items-center gap-6 mb-12">
@@ -407,10 +498,10 @@ export function GettingStartedPage() {
 
       {/* Footer Navigation */}
       <footer className="pt-12 border-t border-white/5 flex items-center justify-between mb-20">
-        <a href="/introduction" className="group flex flex-col gap-1">
+        <Link to="/introduction#welcome" className="group flex flex-col gap-1">
           <span className="text-[9px] font-tech text-white/20 uppercase tracking-widest">Previous</span>
           <span className="text-lg font-serif italic text-white/60 group-hover:text-emerald-400 transition-colors">← Introduction</span>
-        </a>
+        </Link>
         <div className="h-8 w-px bg-white/5"></div>
         <a href="#api" className="group flex flex-col items-end gap-1" onClick={(e) => { e.preventDefault(); document.getElementById('api')?.scrollIntoView({ behavior: 'smooth' }); }}>
           <span className="text-[9px] font-tech text-white/20 uppercase tracking-widest">Next Up</span>
