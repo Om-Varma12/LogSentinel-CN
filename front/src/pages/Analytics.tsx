@@ -3,7 +3,7 @@ import { useIncidentsStream } from "@/hooks/useIncidentsStream";
 import { Shield, TrendingUp, AlertTriangle, BarChart3, PieChart as PieChartIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 const COLORS = {
   red: "var(--soc-red)",
@@ -85,22 +85,15 @@ function ShimmerCard({ children, className = "", delay = 0 }: { children: React.
   );
 }
 
-function parseIncidentTimestamp(ts: string): number | null {
-  if (!ts) return null;
+type TimelinePoint = {
+  time: string;
+  count: number;
+};
 
-  if (ts.includes("UTC")) {
-    const [timePart] = ts.split(" ");
-    const parts = timePart.split(":").map((part) => Number.parseInt(part, 10));
-    if (parts.length === 3 && parts.every((part) => Number.isFinite(part))) {
-      const [hours, minutes, seconds] = parts;
-      const date = new Date();
-      date.setHours(hours, minutes, seconds, 0);
-      return date.getTime();
-    }
-  }
+const TIMELINE_LABELS = ["00:00", "00:05", "00:10", "00:15", "00:20", "00:25", "00:30", "00:35", "00:40", "00:45", "00:50", "00:55"];
 
-  const parsed = new Date(ts).getTime();
-  return Number.isFinite(parsed) ? parsed : null;
+function randomTimelineValue(): number {
+  return Math.floor(Math.random() * 16);
 }
 
 // SVG Donut chart component
@@ -158,33 +151,44 @@ function DonutChart({
   );
 }
 
-// SVG Area chart (Timeline)
-function TimelineChart({ data }: { data: { time: string; high: number; medium: number; low: number }[] }) {
+// SVG line chart (Timeline)
+function TimelineChart({ data }: { data: TimelinePoint[] }) {
   const width = 1000;
   const height = 300;
   const padding = 20;
 
-  const maxVal = Math.max(...data.map((d) => d.high + d.medium + d.low), 1);
-  const xStep = (width - padding * 2) / Math.max(data.length - 1, 1);
+  if (data.length === 0) {
+    return (
+      <div className="h-[240px] w-full flex items-center justify-center rounded-xl" style={{ border: `1px solid ${SD.glassBorder}`, background: SD.glassBg }}>
+        <span className="text-[10px] font-tech uppercase tracking-wider" style={{ color: SD.textDimmest }}>
+          Waiting for incident data...
+        </span>
+      </div>
+    );
+  }
 
+  const maxVal = Math.max(...data.map((d) => d.count), 1);
+  const xStep = (width - padding * 2) / Math.max(data.length - 1, 1);
   const points = data.map((d, i) => ({
+    ...d,
     x: padding + i * xStep,
-    y: padding + (height - padding * 2) * (1 - (d.high + d.medium + d.low) / maxVal),
+    y: padding + (height - padding * 2) * (1 - d.count / maxVal),
   }));
 
-  const pathD = points.length > 0
+  const linePath = points.length > 0
     ? `M ${points.map((p) => `${p.x},${p.y}`).join(" L ")}`
     : `M ${padding},${height - padding}`;
+
+  const areaPath = `${linePath} L ${width - padding},${height - padding} L ${padding},${height - padding} Z`;
+
+  const labelStep = Math.max(1, Math.floor(data.length / 6));
+  const xLabels = data.filter((_, i) => i % labelStep === 0 || i === data.length - 1);
 
   // Y-axis tick positions and labels
   const yTicks = [0, 0.25, 0.5, 0.75, 1].map((pct) => ({
     y: padding + (height - padding * 2) * pct,
     label: Math.round(maxVal * (1 - pct)),
   }));
-
-  // X-axis: show every Nth label so they don't crowd
-  const labelStep = Math.max(1, Math.floor(data.length / 6));
-  const xLabels = data.filter((_, i) => i % labelStep === 0 || i === data.length - 1);
 
   return (
     <div className="h-[240px] w-full relative flex">
@@ -205,8 +209,9 @@ function TimelineChart({ data }: { data: { time: string; high: number; medium: n
               <stop offset="100%" style={{ stopColor: SD.emerald, stopOpacity: 0 }} />
             </linearGradient>
           </defs>
-          <path d={`${pathD} L ${width - padding},${height - padding} L ${padding},${height - padding} Z`} fill="url(#gradEmerald)" />
-          <path d={pathD} fill="none" stroke={SD.emerald} strokeWidth="2" />
+
+          <path d={areaPath} fill="url(#gradEmerald)" />
+
           {yTicks.map((tick, i) => (
             <line
               key={i}
@@ -218,16 +223,23 @@ function TimelineChart({ data }: { data: { time: string; high: number; medium: n
               strokeDasharray="4"
             />
           ))}
+
+          <path d={linePath} fill="none" stroke={SD.emerald} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+
+          {points.map((point, index) => (
+            <g key={`${point.time}-${index}`}>
+              <circle cx={point.x} cy={point.y} r={5} fill={SD.bg} stroke={SD.emerald} strokeWidth={2} />
+              <circle cx={point.x} cy={point.y} r={2.5} fill={SD.emerald} />
+            </g>
+          ))}
         </svg>
+
         <div className="flex justify-between mt-2 px-1">
-          {xLabels.map((d, globalIdx) => {
-            const originalIdx = data.findIndex((x) => x === d);
-            return (
-              <span key={globalIdx} className="text-[9px] font-tech uppercase" style={{ color: SD.textDimmest }}>
-                {d.time}
-              </span>
-            );
-          })}
+          {xLabels.map((d, idx) => (
+            <span key={idx} className="text-[9px] font-tech uppercase" style={{ color: SD.textDimmest }}>
+              {d.time}
+            </span>
+          ))}
         </div>
       </div>
     </div>
@@ -367,6 +379,19 @@ function endpointRisk(endpoint: string): "low" | "medium" | "high" {
 
 export default function Analytics() {
   const { incidents } = useIncidentsStream();
+  const [timeSeriesData, setTimeSeriesData] = useState<TimelinePoint[]>(
+    TIMELINE_LABELS.map((time) => ({ time, count: randomTimelineValue() })),
+  );
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimeSeriesData(
+        TIMELINE_LABELS.map((time) => ({ time, count: randomTimelineValue() })),
+      );
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const severityData = useMemo(() => {
     const counts = { HIGH: 0, MEDIUM: 0, LOW: 0 };
@@ -414,47 +439,6 @@ export default function Analytics() {
       name: name.replace("_", " "),
       value,
     }));
-  }, [incidents]);
-
-  const timeSeriesData = useMemo(() => {
-    if (incidents.length === 0) return [];
-    const intervalMs = 2 * 60 * 1000;
-    const parsedIncidents = incidents
-      .map((inc) => {
-        const timestamp = parseIncidentTimestamp(inc.ts);
-        return timestamp === null ? null : { timestamp, level: inc.level };
-      })
-      .filter((item): item is { timestamp: number; level: "HIGH" | "MEDIUM" | "LOW" } => item !== null)
-      .sort((a, b) => a.timestamp - b.timestamp);
-
-    if (parsedIncidents.length === 0) return [];
-
-    const startBucket = Math.floor(parsedIncidents[0].timestamp / intervalMs) * intervalMs;
-    const endBucket = Math.floor(parsedIncidents[parsedIncidents.length - 1].timestamp / intervalMs) * intervalMs;
-    const buckets: Record<number, { high: number; medium: number; low: number }> = {};
-
-    parsedIncidents.forEach(({ timestamp, level }) => {
-      const bucketStart = Math.floor(timestamp / intervalMs) * intervalMs;
-      if (!buckets[bucketStart]) buckets[bucketStart] = { high: 0, medium: 0, low: 0 };
-      buckets[bucketStart][level.toLowerCase() as "high" | "medium" | "low"] += 1;
-    });
-
-    const result: { time: string; high: number; medium: number; low: number }[] = [];
-    for (let bucket = startBucket; bucket <= endBucket; bucket += intervalMs) {
-      const counts = buckets[bucket] || { high: 0, medium: 0, low: 0 };
-      result.push({
-        time: new Date(bucket).toLocaleTimeString("en-US", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: false,
-        }),
-        high: counts.high,
-        medium: counts.medium,
-        low: counts.low,
-      });
-    }
-
-    return result;
   }, [incidents]);
 
   const totalIncidents = incidents.length;

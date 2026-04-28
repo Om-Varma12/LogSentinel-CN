@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { createIncidentsSocket } from "@/lib/api";
 import { transform } from "@/components/soc/transform";
 import type { ApiIncident, Incident, TerminalLine } from "@/components/soc/types";
@@ -14,6 +14,110 @@ type WsMessage =
 type ControlMessage =
   | { type: "activate" };
 
+type StreamSnapshot = {
+  incidents: Incident[];
+  terminal: TerminalLine[];
+};
+
+type StreamStore = StreamSnapshot & {
+  listeners: Set<() => void>;
+  socket: WebSocket | null;
+  reconnectTimer: ReturnType<typeof setTimeout> | null;
+  index: number;
+  done: boolean;
+  waitingNotified: boolean;
+  activated: boolean;
+};
+
+const streamStore: StreamStore = {
+  incidents: [],
+  terminal: [],
+  listeners: new Set(),
+  socket: null,
+  reconnectTimer: null,
+  index: 0,
+  done: false,
+  waitingNotified: false,
+  activated: false,
+};
+
+function emitStreamUpdate() {
+  streamStore.listeners.forEach((listener) => listener());
+}
+
+function setIncidents(next: Incident[]) {
+  streamStore.incidents = next;
+  emitStreamUpdate();
+}
+
+function setTerminal(next: TerminalLine[]) {
+  streamStore.terminal = next;
+  emitStreamUpdate();
+}
+
+function appendTerminalLine(line: TerminalLine) {
+  setTerminal([...streamStore.terminal, line].slice(-MAX_TERMINAL_LINES));
+}
+
+function connectStream() {
+  if (streamStore.done) return;
+
+  const socketState = streamStore.socket?.readyState;
+  if (socketState === WebSocket.OPEN || socketState === WebSocket.CONNECTING) {
+    return;
+  }
+
+  if (streamStore.reconnectTimer) {
+    clearTimeout(streamStore.reconnectTimer);
+    streamStore.reconnectTimer = null;
+  }
+
+  const ws = createIncidentsSocket();
+  streamStore.socket = ws;
+
+  ws.onopen = () => {
+    streamStore.waitingNotified = false;
+    if (!streamStore.activated) {
+      ws.send(JSON.stringify({ type: "activate" }));
+      streamStore.activated = true;
+    }
+  };
+
+  ws.onmessage = (event: MessageEvent) => {
+    const msg: WsMessage = JSON.parse(event.data as string);
+
+    if (msg.type === "done") {
+      streamStore.done = true;
+      appendTerminalLine({ text: "[SYSTEM] Pipeline complete - all logs processed", style: "ok" as const });
+      return;
+    }
+
+    const inc = transform(msg.data, streamStore.index);
+    streamStore.index += 1;
+
+    setIncidents([inc, ...streamStore.incidents].slice(0, MAX_INCIDENTS));
+    setTerminal([...streamStore.terminal, ...toTerminalLines(inc)].slice(-MAX_TERMINAL_LINES));
+  };
+
+  ws.onerror = () => { /* onclose will fire next and handle it */ };
+
+  ws.onclose = () => {
+    if (streamStore.done) return;
+
+    if (!streamStore.waitingNotified) {
+      appendTerminalLine({ text: "[SYSTEM] Waiting for pipeline server...", style: "lo" as const });
+      streamStore.waitingNotified = true;
+    }
+
+    streamStore.reconnectTimer = setTimeout(() => {
+      streamStore.index = 0;
+      streamStore.activated = false;
+      setIncidents([]);
+      connectStream();
+    }, RECONNECT_DELAY_MS);
+  };
+}
+
 function toTerminalLines(inc: Incident): TerminalLine[] {
   const riskStyle: TerminalLine["style"] =
     inc.level === "HIGH" ? "err" : inc.level === "MEDIUM" ? "warn" : "ok";
@@ -26,86 +130,27 @@ function toTerminalLines(inc: Incident): TerminalLine[] {
 }
 
 export function useIncidentsStream() {
-  const [incidents, setIncidents] = useState<Incident[]>([]);
-  const [terminal, setTerminal] = useState<TerminalLine[]>([]);
-
-  // Monotonically increasing index across reconnects — keeps IDs consistent
-  const indexRef = useRef(0);
-  const doneRef = useRef(false);
-  const waitingNotifiedRef = useRef(false);
-  const socketRef = useRef<WebSocket | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const activatedRef = useRef(false);
+  const [snapshot, setSnapshot] = useState<StreamSnapshot>({
+    incidents: streamStore.incidents,
+    terminal: streamStore.terminal,
+  });
 
   useEffect(() => {
-    function connect() {
-      if (doneRef.current) return;
+    const listener = () => {
+      setSnapshot({
+        incidents: streamStore.incidents,
+        terminal: streamStore.terminal,
+      });
+    };
 
-      const ws = createIncidentsSocket();
-      socketRef.current = ws;
-
-      ws.onopen = () => {
-        waitingNotifiedRef.current = false;
-        // Send activation signal to backend to start streaming logs
-        if (!activatedRef.current) {
-          ws.send(JSON.stringify({ type: "activate" }));
-          activatedRef.current = true;
-        }
-      };
-
-      ws.onmessage = (event: MessageEvent) => {
-        const msg: WsMessage = JSON.parse(event.data as string);
-
-        if (msg.type === "done") {
-          doneRef.current = true;
-          setTerminal((prev) =>
-            [...prev, { text: "[SYSTEM] Pipeline complete - all logs processed", style: "ok" as const }]
-              .slice(-MAX_TERMINAL_LINES),
-          );
-          return;
-        }
-
-        const inc = transform(msg.data, indexRef.current);
-        indexRef.current += 1;
-
-        setIncidents((prev) => [inc, ...prev].slice(0, MAX_INCIDENTS));
-        setTerminal((prev) => [...prev, ...toTerminalLines(inc)].slice(-MAX_TERMINAL_LINES));
-      };
-
-      ws.onerror = () => { /* onclose will fire next and handle it */ };
-
-      ws.onclose = () => {
-        if (doneRef.current) return;
-
-        if (!waitingNotifiedRef.current) {
-          setTerminal((prev) =>
-            [...prev, { text: "[SYSTEM] Waiting for pipeline server...", style: "lo" as const }]
-              .slice(-MAX_TERMINAL_LINES),
-          );
-          waitingNotifiedRef.current = true;
-        }
-
-        // On reconnect backend replays from the beginning, so reset index and list
-        reconnectTimerRef.current = setTimeout(() => {
-          indexRef.current = 0;
-          activatedRef.current = false;
-          setIncidents([]);
-          connect();
-        }, RECONNECT_DELAY_MS);
-      };
-    }
-
-    connect();
+    streamStore.listeners.add(listener);
+    connectStream();
+    listener();
 
     return () => {
-      doneRef.current = true;
-      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-      if (socketRef.current) {
-        socketRef.current.onclose = null; // suppress reconnect on intentional close
-        socketRef.current.close();
-      }
+      streamStore.listeners.delete(listener);
     };
   }, []);
 
-  return { incidents, terminal };
+  return snapshot;
 }
