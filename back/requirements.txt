@@ -11,3 +11,5 @@ dotenv
 fastapi
 uvicorn
 requests
+matplotlib
+plotly

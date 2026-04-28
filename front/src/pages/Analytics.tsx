@@ -85,6 +85,24 @@ function ShimmerCard({ children, className = "", delay = 0 }: { children: React.
   );
 }
 
+function parseIncidentTimestamp(ts: string): number | null {
+  if (!ts) return null;
+
+  if (ts.includes("UTC")) {
+    const [timePart] = ts.split(" ");
+    const parts = timePart.split(":").map((part) => Number.parseInt(part, 10));
+    if (parts.length === 3 && parts.every((part) => Number.isFinite(part))) {
+      const [hours, minutes, seconds] = parts;
+      const date = new Date();
+      date.setHours(hours, minutes, seconds, 0);
+      return date.getTime();
+    }
+  }
+
+  const parsed = new Date(ts).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 // SVG Donut chart component
 function DonutChart({
   data,
@@ -155,7 +173,7 @@ function TimelineChart({ data }: { data: { time: string; high: number; medium: n
   }));
 
   const pathD = points.length > 0
-    ? `M ${points.map((p) => `${p.x},${p.y}`).join(" T ") || `M ${padding},${height - padding}`}`
+    ? `M ${points.map((p) => `${p.x},${p.y}`).join(" L ")}`
     : `M ${padding},${height - padding}`;
 
   // Y-axis tick positions and labels
@@ -400,62 +418,42 @@ export default function Analytics() {
 
   const timeSeriesData = useMemo(() => {
     if (incidents.length === 0) return [];
-    
-    // Parse timestamps and bucket into 5-minute intervals
-    const intervalMs = 5 * 60 * 1000;
-    const buckets: Record<number, { high: number; medium: number; low: number }> = {};
-    
-    let earliestTime = Date.now();
-    let latestTime = 0;
+    const intervalMs = 2 * 60 * 1000;
+    const parsedIncidents = incidents
+      .map((inc) => {
+        const timestamp = parseIncidentTimestamp(inc.ts);
+        return timestamp === null ? null : { timestamp, level: inc.level };
+      })
+      .filter((item): item is { timestamp: number; level: "HIGH" | "MEDIUM" | "LOW" } => item !== null)
+      .sort((a, b) => a.timestamp - b.timestamp);
 
-    // Parse incidents and find time range
-    incidents.forEach((inc) => {
-      try {
-        // Parse the timestamp (format: "HH:MM:SS UTC" or ISO)
-        const timeStr = inc.ts;
-        let incTime: number;
-        
-        if (timeStr.includes("UTC")) {
-          // Convert "HH:MM:SS UTC" to milliseconds from today
-          const parts = timeStr.split(" ")[0].split(":");
-          const hours = parseInt(parts[0]);
-          const minutes = parseInt(parts[1]);
-          const seconds = parseInt(parts[2]);
-          const today = new Date();
-          today.setHours(hours, minutes, seconds, 0);
-          incTime = today.getTime();
-        } else {
-          // Try parsing as ISO string
-          incTime = new Date(timeStr).getTime();
-        }
-        
-        earliestTime = Math.min(earliestTime, incTime);
-        latestTime = Math.max(latestTime, incTime);
-        
-        const bucketKey = Math.floor((incTime - earliestTime) / intervalMs);
-        if (!buckets[bucketKey]) buckets[bucketKey] = { high: 0, medium: 0, low: 0 };
-        buckets[bucketKey][inc.level.toLowerCase() as "high" | "medium" | "low"]++;
-      } catch (e) {
-        console.error("Failed to parse incident timestamp:", inc.ts, e);
-      }
+    if (parsedIncidents.length === 0) return [];
+
+    const startBucket = Math.floor(parsedIncidents[0].timestamp / intervalMs) * intervalMs;
+    const endBucket = Math.floor(parsedIncidents[parsedIncidents.length - 1].timestamp / intervalMs) * intervalMs;
+    const buckets: Record<number, { high: number; medium: number; low: number }> = {};
+
+    parsedIncidents.forEach(({ timestamp, level }) => {
+      const bucketStart = Math.floor(timestamp / intervalMs) * intervalMs;
+      if (!buckets[bucketStart]) buckets[bucketStart] = { high: 0, medium: 0, low: 0 };
+      buckets[bucketStart][level.toLowerCase() as "high" | "medium" | "low"] += 1;
     });
 
-    // Fill gaps with zero buckets for continuous timeline
-    const minBucket = 0;
-    const maxBucket = Math.ceil((latestTime - earliestTime) / intervalMs);
-    
-    const result = [];
-    for (let i = minBucket; i <= maxBucket; i++) {
-      const ms = earliestTime + i * intervalMs;
-      const ts = new Date(ms).toLocaleTimeString("en-US", { hour12: false });
+    const result: { time: string; high: number; medium: number; low: number }[] = [];
+    for (let bucket = startBucket; bucket <= endBucket; bucket += intervalMs) {
+      const counts = buckets[bucket] || { high: 0, medium: 0, low: 0 };
       result.push({
-        time: ts,
-        high: buckets[i]?.high || 0,
-        medium: buckets[i]?.medium || 0,
-        low: buckets[i]?.low || 0,
+        time: new Date(bucket).toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }),
+        high: counts.high,
+        medium: counts.medium,
+        low: counts.low,
       });
     }
-    
+
     return result;
   }, [incidents]);
 
